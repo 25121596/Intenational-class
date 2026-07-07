@@ -1,0 +1,4 @@
+启动powershells输入：cd "c:\Intenational class\tower_defender"
+npm run dev
+会给你一个网址，复制到浏览器开始玩。
+

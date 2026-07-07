@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>钢铁之心（Iron Hearts）· 0.5 Beta</title>
+</head>
+<body>
+  <div class="game-container">
+    <!-- ====== 一级主页面 ====== -->
+    <div class="main-menu-overlay" id="mainMenuOverlay">
+      <div class="main-menu-logo">🛡️</div>
+      <div class="main-menu-title">钢铁之心</div>
+      <div class="main-menu-subtitle">I R O N  H E A R T S · 0.5 Beta</div>
+      <div class="main-menu-buttons">
+        <button class="main-menu-btn primary" id="mainStartBtn">⚔️ 开始游戏</button>
+        <button class="main-menu-btn" id="mainSaveMgrBtn">💾 存档管理</button>
+        <button class="main-menu-btn" id="mainTutorialBtn">📖 操作说明</button>
+        <button class="main-menu-btn danger" id="mainQuitBtn">🚪 退出游戏</button>
+      </div>
+      <div class="difficulty-selector" id="difficultySelector">
+        <span class="diff-label">🎖️ 难度选择：</span>
+        <button class="diff-btn active" data-diff="private">列兵</button>
+        <button class="diff-btn" data-diff="sergeant">中士</button>
+        <button class="diff-btn" data-diff="colonel">上校</button>
+      </div>
+      <div class="main-menu-version">v0.5 Beta · DEBUG</div>
+    </div>
+
+    <!-- ====== 存档管理页面 ====== -->
+    <div class="save-overlay hidden" id="saveOverlay">
+      <div class="save-title">💾 存档管理</div>
+      <div class="save-slots" id="saveSlots">
+        <!-- dynamically filled -->
+      </div>
+      <div class="save-btn-row">
+        <button class="menu-btn" id="saveBackBtn">← 返回主菜单</button>
+        <button class="menu-btn danger" id="saveClearAllBtn">🗑️ 清除全部存档</button>
+      </div>
+    </div>
+
+    <!-- ====== 战场选择页面 ====== -->
+    <div class="campaign-overlay hidden" id="campaignOverlay">
+      <div class="campaign-title">🗺️ 选择战场</div>
+      <div class="campaign-subtitle">选择一个战役开始你的征程</div>
+      <div class="campaign-grid" id="campaignGrid">
+        <!-- dynamically filled -->
+      </div>
+      <button class="campaign-back-btn" id="campaignBackBtn">← 返回主菜单</button>
+    </div>
+
+    <!-- ====== 关卡选择页面 (原有菜单) ====== -->
+    <div class="menu-overlay hidden" id="menuOverlay">
+      <div class="menu-title" id="menuCampaignTitle">🛡️ 钢铁之心</div>
+      <div class="menu-subtitle" id="menuCampaignSubtitle">I R O N  H E A R T S</div>
+      <div class="menu-level-grid" id="menuLevelGrid"></div>
+      <div class="menu-btn-row">
+        <button class="menu-btn" id="menuBackToCampaignBtn">← 返回战场选择</button>
+        <button class="menu-btn" id="menuTutorialBtn2">📖 操作说明</button>
+      </div>
+    </div>
+
+    <!-- ====== 游戏界面 ====== -->
+    <div class="game-header">
+      <div>
+        <div class="game-title"><span class="icon">🛡️</span> 钢铁之心 · Iron Hearts</div>
+        <div class="level-name" id="levelName">LV.1 诺曼底 · 滩头阵地</div>
+      </div>
+      <div class="wave-badges" id="waveBadges"></div>
+      <div class="wave-preview" id="wavePreview" style="display:none;"></div>
+    </div>
+    <canvas id="gameCanvas" width="900" height="600"></canvas>
+    <div class="ui-bar">
+      <div class="stats">
+        <span class="stat-item lv">🗺️ <span id="lvDisplay">1</span>/<span id="lvTotalDisplay">5</span></span>
+        <span class="stat-item hp">❤️ <span id="hpDisplay">20</span></span>
+        <span class="stat-item gold">💰 <span id="goldDisplay">200</span></span>
+        <span class="stat-item wave">🌊 <span id="waveDisplay">1</span>/<span id="waveMaxDisplay">3</span></span>
+        <span class="stat-item timer" id="timerStat" style="display:none;">⏱️ <span id="timerDisplay">0</span>秒</span>
+        <span class="stat-item kills">💀 <span id="killDisplay">0</span></span>
+      </div>
+      <div class="actions">
+        <button id="btnMachine" class="active-tower" title="射速快，伤害低">🔫 MG42 50💰</button>
+        <button id="btnCannon" title="高伤害，慢射速">💣 Flak36 80💰</button>
+        <button id="btnHowitzer" title="范围溅射伤害">💥 SIG33 100💰</button>
+        <span class="divider"></span>
+        <button id="btnInfantry" class="active-blocker" title="近战阻挡1敌">🛡️ 轻步兵 60💰</button>
+        <button id="btnDefender" title="近战阻挡2敌+远程掷弹">🪖 掷弹兵 120💰</button>
+        <span class="divider"></span>
+        <button id="sellModeBtn" title="点击单位出售(返还60%)">🔧 出售</button>
+        <button id="upgradeModeBtn" title="点击单位升级(伤害+25% HP+10% 射程+5% 回复50%血)">⬆️ 升级</button>
+        <button id="pauseBtn" title="暂停/继续游戏">⏯️ 暂停</button>
+        <button id="nextWaveBtn" class="next-wave-btn">⚡ 下一波</button>
+        <button id="restartBtn" title="重新开始本关">🔄 重开</button>
+        <button class="menu-return-btn" id="menuReturnBtn" title="返回主菜单">🏠 菜单</button>
+        <span class="hint-text" id="hintText">远程:炮位 · 近战:路径 · 右键出售 · Shift+点击升级</span>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
