@@ -1,9 +1,9 @@
 import {
   TOWER_DEFS, BLOCKER_DEFS, ENEMY_PROTO, PATH_NAMES, LEVELS, CAMPAIGNS,
-  ENDLESS_LEVEL, generateEndlessWave, TOWER_BRANCHES,
+  ENDLESS_LEVEL, ENDLESS_LEVELS, generateEndlessWave, TOWER_BRANCHES,
 } from './config.js';
 import {
-  computePathLengths, getPositionOnPath, findNearestPathPoint, findNearestFreeSlot,
+  computePathLengths, getPositionOnPath, getEnemyPos, findNearestPathPoint, findNearestFreeSlot,
   spawnParticles, updateParticles, generateTrees, generateRoadStones,
   spawnEnemy, buildSpawnQueue, getEnemyMoveAmount,
   generateClouds, updateClouds, generateBirds, updateBirds,
@@ -64,11 +64,10 @@ export function createGameState() {
     clouds: [], birds: [],
     activeCampaign: null,
     difficulty: 'private',
-    endless: false,
+    endless: false, endlessMap: null, endlessBest: 0,
     airstrikeCd: 0, airstrikeMax: 900, airstrikeArming: false,
     airstrikeDmg: 55, airstrikeRadius: 120,
     levelStars: 0, isPerfectClear: false,
-    goldTickTimer: 0,
     towersPlaced: 0, blockersPlaced: 0, unitsLost: 0, goldEarned: 0,
     shakeX: 0, shakeY: 0, shakeTimer: 0, shakeIntensity: 0, shakeMax: 0,
     seenEnemyTypes: {},
@@ -93,11 +92,19 @@ export function calculateStars(hp, startHp) {
 
 // ---- 关卡管理 ----
 export function loadLevel(game, index) {
-  if (index === 'endless') {
+  if (typeof index === 'string' && index.startsWith('endless:')) {
+    const mapKey = index.split(':')[1] || 'rhine';
+    game.endlessMap = mapKey;
+    game.levelIndex = -1;
+    game.level = ENDLESS_LEVELS[mapKey] || ENDLESS_LEVELS.rhine;
+    game.endless = true;
+  } else if (index === 'endless') {
+    game.endlessMap = 'rhine';
     game.levelIndex = -1;
     game.level = ENDLESS_LEVEL;
     game.endless = true;
   } else {
+    game.endlessMap = null;
     game.levelIndex = index;
     game.level = LEVELS[index];
     game.endless = false;
@@ -123,7 +130,6 @@ export function loadLevel(game, index) {
   game.waveAutoTimer = -1; game.waveAutoTotal = 0;
   game.announcement = `${game.level.name} — ${game.level.desc}`;
   game.announcementTimer = 130;
-  game.goldTickTimer = 0;
   game.towersPlaced = 0; game.blockersPlaced = 0; game.unitsLost = 0; game.goldEarned = 0;
   game.menuOpen = false;
   game.paused = false;
@@ -284,7 +290,7 @@ function killEnemy(game, e) {
   game.goldEarned += e.reward;
   game.kills++;
   playDeath();
-  const ep = getPositionOnPath(e.progress, e.pathIndex, game);
+  const ep = getEnemyPos(e, game);
   spawnDamageNumber(game, ep.x, ep.y, `+${e.reward}💰`, '#ffd700');
   spawnParticles(game, ep.x, ep.y, 14, '#ffcc44', [1.5, 4], [10, 22]);
 }
@@ -301,12 +307,14 @@ function spawnDamageNumber(game, x, y, text, color) {
 }
 
 function updateDamageNumbers(game) {
-  for (let i = game.damageNumbers.length - 1; i >= 0; i--) {
+  let w = 0;
+  for (let i = 0; i < game.damageNumbers.length; i++) {
     const dn = game.damageNumbers[i];
     dn.y += dn.vy;
     dn.life--;
-    if (dn.life <= 0) game.damageNumbers.splice(i, 1);
+    if (dn.life > 0) { game.damageNumbers[w++] = dn; }
   }
+  game.damageNumbers.length = w;
 }
 
 function finalizeBlockerDeployment(game, dep) {
@@ -442,7 +450,7 @@ export function triggerAirstrike(game, x, y) {
   let hit = 0;
   for (const e of game.enemies) {
     if (e.isDead) continue;
-    const ep = getPositionOnPath(e.progress, e.pathIndex, game);
+    const ep = getEnemyPos(e, game);
     if (Math.hypot(ep.x - x, ep.y - y) <= game.airstrikeRadius) {
       e.hp -= game.airstrikeDmg; hit++;
       if (e.hp <= 0 && !e.isDead) { killEnemy(game, e); }
@@ -466,30 +474,23 @@ export function update(game) {
     if (game.announcementTimer <= 0) game.announcement = null;
   }
 
-  // 被动金币收入（波次间隙每秒+1）
-  if (!game.isWaveActive && !game.gameOver && !game.gameWin && !game.levelComplete) {
-    game.goldTickTimer++;
-    if (game.goldTickTimer >= 60) {
-      game.goldTickTimer = 0;
-      game.gold += 1;
-      game.goldEarned += 1;
-    }
-  }
-
   // 伤害数字更新
   updateDamageNumbers(game);
 
-  // 部署进度
-  for (let i = game.deployments.length - 1; i >= 0; i--) {
+  // 部署进度（compact避免频繁splice）
+  let dw = 0;
+  for (let i = 0; i < game.deployments.length; i++) {
     const d = game.deployments[i];
     d.timer--;
     if (d.timer <= 0) {
       if (d.isUpgrade) finalizeUpgrade(game, d);
       else if (d.isTower) finalizeTowerDeployment(game, d);
       else finalizeBlockerDeployment(game, d);
-      game.deployments.splice(i, 1);
+    } else {
+      game.deployments[dw++] = d;
     }
   }
+  game.deployments.length = dw;
 
   // 自动波次倒计时
   if (game.waveAutoTimer > 0 && !game.isWaveActive && !game.gameOver && !game.gameWin && !game.levelComplete) {
@@ -525,7 +526,7 @@ export function update(game) {
       game.announcement = '🐭 鼠式召唤增援！+2强化坦克';
       game.announcementTimer = 90;
       triggerShake(game, 6, 20);
-      const bossPos = getPositionOnPath(game.bossEnemy.progress, game.bossEnemy.pathIndex, game);
+      const bossPos = getEnemyPos(game.bossEnemy, game);
       spawnParticles(game, bossPos.x, bossPos.y, 30, '#ff3300', [2, 6], [12, 28]);
     }
   }
@@ -567,7 +568,7 @@ export function update(game) {
     // 坦克远程攻击
     if (e.ranged && e.rCooldown <= 0) {
       let bestTarget = null, bestDist = Infinity;
-      const ePos = getPositionOnPath(e.progress, e.pathIndex, game);
+      const ePos = getEnemyPos(e, game);
       for (const b of game.blockers) {
         if (b.isDead) continue;
         const d = Math.hypot(b.x - ePos.x, b.y - ePos.y);
@@ -614,7 +615,12 @@ export function update(game) {
       e.progress += moveAmount;
       if (!e.flying) {
         for (const b of game.blockers) {
-          if (b.isDead || b.pathIndex !== e.pathIndex) continue;
+          if (b.isDead) continue;
+          // 允许跨路径阻挡：当阻挡单位与敌人位置接近时（汇合路段）
+          if (b.pathIndex !== e.pathIndex) {
+            const ep = getEnemyPos(e, game);
+            if (Math.hypot(b.x - ep.x, b.y - ep.y) > 28) continue;
+          }
           if (oldProgress < b.pathProgress && e.progress >= b.pathProgress) {
             let blockedCount = 0;
             for (const e2 of game.enemies) { if (e2.blockingUnit === b && !e2.isDead) blockedCount++; }
@@ -635,6 +641,13 @@ export function update(game) {
         spawnParticles(game, endP.x - 10, endP.y, 10, '#ff4444', [1, 3], [10, 20]);
         if (game.hp <= 0) {
           game.hp = 0; game.gameOver = true; game.isWaveActive = false; game.waveAutoTimer = -1;
+          // 无尽模式保存最高波次
+          if (game.endless && game.endlessMap) {
+            try {
+              const data = JSON.parse(localStorage.getItem('ih_endless_best') || '{}');
+              if (game.wave > (data[game.endlessMap] || 0)) { data[game.endlessMap] = game.wave; localStorage.setItem('ih_endless_best', JSON.stringify(data)); }
+            } catch {}
+          }
           game.announcement = '💀 防线崩溃! 点击画布重新开始';
           game.announcementTimer = 9999;
           return;
@@ -647,11 +660,11 @@ export function update(game) {
   for (const e of game.enemies) {
     if (e.isDead || !e.healer) continue;
     if (e.healCooldown > 0) { e.healCooldown--; continue; }
-    const ep = getPositionOnPath(e.progress, e.pathIndex, game);
+    const ep = getEnemyPos(e, game);
     let healed = false;
     for (const o of game.enemies) {
       if (o.isDead || o === e) continue;
-      const op = getPositionOnPath(o.progress, o.pathIndex, game);
+      const op = getEnemyPos(o, game);
       if (Math.hypot(op.x - ep.x, op.y - ep.y) <= e.healRange && o.hp < o.maxHp) {
         o.hp = Math.min(o.maxHp, o.hp + e.healAmount); healed = true;
       }
@@ -705,7 +718,7 @@ export function update(game) {
         if (e.blockingUnit === b && !e.isDead) {
           e.hp -= b.damage;
           b.attackCooldown = b.attackInterval;
-          const ePos = getPositionOnPath(e.progress, e.pathIndex, game);
+          const ePos = getEnemyPos(e, game);
           spawnDamageNumber(game, ePos.x, ePos.y, `-${b.damage}`, '#ff9944');
           spawnParticles(game, ePos.x, ePos.y, 4, '#ffdd55', [0.5, 2], [4, 10]);
           if (e.hp <= 0 && !e.isDead) { killEnemy(game, e); }
@@ -721,7 +734,7 @@ export function update(game) {
         let bestTarget = null, bestDist = def.rng;
         for (const e of game.enemies) {
           if (e.isDead) continue;
-          const ePos = getPositionOnPath(e.progress, e.pathIndex, game);
+          const ePos = getEnemyPos(e, game);
           const d = Math.hypot(ePos.x - b.x, ePos.y - b.y);
           if (d < bestDist) { bestDist = d; bestTarget = { enemy: e, pos: ePos }; }
         }
@@ -748,7 +761,7 @@ export function update(game) {
     for (const e of game.enemies) {
       if (e.isDead) continue;
       if (e.flying && !tower.canTargetFlying) continue;
-      const pos = getPositionOnPath(e.progress, e.pathIndex, game);
+      const pos = getEnemyPos(e, game);
       const dist = Math.hypot(pos.x - tower.x, pos.y - tower.y);
       if (dist < tower.range && e.progress > bestProgress) { bestProgress = e.progress; bestTarget = { enemy: e, pos }; }
     }
@@ -784,7 +797,7 @@ export function update(game) {
     const p = game.projectiles[i];
     let targetX, targetY;
     if (!p.isSplash && p.targetEnemy && !p.targetEnemy.isDead) {
-      const ePos = getPositionOnPath(p.targetEnemy.progress, p.targetEnemy.pathIndex, game);
+      const ePos = getEnemyPos(p.targetEnemy, game);
       targetX = ePos.x; targetY = ePos.y;
     } else if (p.isSplash) { targetX = p.targetX; targetY = p.targetY; }
     else { game.projectiles.splice(i, 1); continue; } // 目标已死，移除子弹
@@ -796,7 +809,7 @@ export function update(game) {
         playExplosion(); triggerShake(game, 4, 10);
         for (const e of game.enemies) {
           if (e.isDead) continue;
-          const ePos = getPositionOnPath(e.progress, e.pathIndex, game);
+          const ePos = getEnemyPos(e, game);
           const edist = Math.hypot(ePos.x - p.x, ePos.y - p.y);
           if (edist <= p.splashRadius) {
             const dmg = edist < 20 ? p.damage : Math.floor(p.damage * p.splashDamagePct);
@@ -821,16 +834,26 @@ export function update(game) {
     p.x += (dx / dist) * step; p.y += (dy / dist) * step;
   }
 
-  // 清理
-  game.enemies = game.enemies.filter(e => !e.isDead || e.dyingTimer > 0);
-  game.blockers = game.blockers.filter(b => {
-    if (b.isDead) { for (const e of game.enemies) { if (e.blockingUnit === b) { e.blocked = false; e.blockingUnit = null; } } game.unitsLost++; spawnParticles(game, b.x, b.y, 20, '#ff4444', [1, 4], [10, 25]); return false; }
-    return true;
-  });
-  game.towers = game.towers.filter(t => {
-    if (t.isDead) { for (const s of game.slots) { if (s.tower === t) { s.occupied = false; s.tower = null; } } game.unitsLost++; spawnParticles(game, t.x, t.y, 22, '#ff4444', [1.5, 5], [12, 26]); return false; }
-    return true;
-  });
+  // 清理（反向splice避免新数组分配）
+  for (let i = game.enemies.length - 1; i >= 0; i--) {
+    if (game.enemies[i].isDead && game.enemies[i].dyingTimer <= 0) game.enemies.splice(i, 1);
+  }
+  for (let i = game.blockers.length - 1; i >= 0; i--) {
+    if (game.blockers[i].isDead) {
+      const b = game.blockers[i];
+      for (const e of game.enemies) { if (e.blockingUnit === b) { e.blocked = false; e.blockingUnit = null; } }
+      game.unitsLost++; spawnParticles(game, b.x, b.y, 20, '#ff4444', [1, 4], [10, 25]);
+      game.blockers.splice(i, 1);
+    }
+  }
+  for (let i = game.towers.length - 1; i >= 0; i--) {
+    if (game.towers[i].isDead) {
+      const t = game.towers[i];
+      for (const s of game.slots) { if (s.tower === t) { s.occupied = false; s.tower = null; } }
+      game.unitsLost++; spawnParticles(game, t.x, t.y, 22, '#ff4444', [1.5, 5], [12, 26]);
+      game.towers.splice(i, 1);
+    }
+  }
 
   updateParticles(game);
 }

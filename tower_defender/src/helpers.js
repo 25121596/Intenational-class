@@ -20,15 +20,22 @@ export function getPositionOnPath(progress, pathIndex, game) {
     const segLen = Math.hypot(curr.x - prev.x, curr.y - prev.y);
     if (cumDist + segLen >= targetDist || i === path.length - 1) {
       const t = segLen > 0 ? (targetDist - cumDist) / segLen : 0;
-      return {
-        x: prev.x + (curr.x - prev.x) * Math.max(0, Math.min(1, t)),
-        y: prev.y + (curr.y - prev.y) * Math.max(0, Math.min(1, t)),
-      };
+      const tt = Math.max(0, Math.min(1, t));
+      return { x: prev.x + (curr.x - prev.x) * tt, y: prev.y + (curr.y - prev.y) * tt };
     }
     cumDist += segLen;
   }
   const last = path[path.length - 1];
   return { x: last.x, y: last.y };
+}
+
+// 缓存敌人位置（每帧只计算一次）
+export function getEnemyPos(e, game) {
+  if (e._cframe !== game.frame) {
+    const p = getPositionOnPath(e.progress, e.pathIndex, game);
+    e._cx = p.x; e._cy = p.y; e._cframe = game.frame;
+  }
+  return { x: e._cx, y: e._cy };
 }
 
 export function findNearestPathPoint(x, y, game) {
@@ -77,13 +84,15 @@ export function spawnParticles(game, x, y, count, color, speedRange, lifeRange) 
 }
 
 export function updateParticles(game) {
-  for (let i = game.particles.length - 1; i >= 0; i--) {
+  let write = 0;
+  for (let i = 0; i < game.particles.length; i++) {
     const p = game.particles[i];
     p.x += p.vx; p.y += p.vy;
     p.vx *= 0.94; p.vy *= 0.94;
     p.life--;
-    if (p.life <= 0) game.particles.splice(i, 1);
+    if (p.life > 0) { game.particles[write++] = p; }
   }
+  game.particles.length = write;
 }
 
 // ---- 场景生成 ----

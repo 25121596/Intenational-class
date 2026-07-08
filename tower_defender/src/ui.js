@@ -446,8 +446,20 @@ export function setupUI(game, callbacks) {
   }
 
   // ====== 战役网格渲染 ======
+  // 无尽模式高分
+  function getEndlessBest(mapKey) {
+    try { return JSON.parse(localStorage.getItem('ih_endless_best') || '{}')[mapKey] || 0; } catch { return 0; }
+  }
+  function setEndlessBest(mapKey, wave) {
+    try {
+      const data = JSON.parse(localStorage.getItem('ih_endless_best') || '{}');
+      if (wave > (data[mapKey] || 0)) { data[mapKey] = wave; localStorage.setItem('ih_endless_best', JSON.stringify(data)); }
+    } catch {}
+  }
+
   function renderCampaignGrid() {
     campaignGrid.innerHTML = '';
+    // 三大战役
     CAMPAIGNS.forEach(camp => {
       const card = document.createElement('div');
       card.className = 'campaign-card';
@@ -481,6 +493,61 @@ export function setupUI(game, callbacks) {
 
       campaignGrid.appendChild(card);
     });
+
+    // 无尽模式入口
+    const endlessCard = document.createElement('div');
+    endlessCard.className = 'campaign-card';
+    const rhineBest = getEndlessBest('rhine'), stalBest = getEndlessBest('stalingrad');
+    endlessCard.innerHTML = `
+      <div class="campaign-icon">♾️</div>
+      <div class="campaign-info">
+        <div class="campaign-name">无尽模式</div>
+        <div class="campaign-sub">无限波次生存挑战</div>
+        <div class="campaign-desc">莱茵河最高${rhineBest}波 · 斯大林格勒最高${stalBest}波</div>
+      </div>
+      <div class="campaign-badge available">2张地图</div>
+    `;
+    endlessCard.addEventListener('click', () => showEndlessSelect());
+    campaignGrid.appendChild(endlessCard);
+  }
+
+  // 无尽模式地图选择
+  function showEndlessSelect() {
+    hideAllOverlays();
+    campaignOverlay.classList.remove('hidden');
+    game.menuOpen = true; game.paused = false;
+    campaignGrid.innerHTML = '';
+
+    const maps = [
+      { key: 'rhine', name: '跨越莱茵', desc: '莱茵河大桥 · 三桥防线', icon: '🌊', id: 'rhine' },
+      { key: 'stalingrad', name: '斯大林格勒', desc: '城市巷战 · 雪地防守', icon: '❄️', id: 'stalingrad' },
+    ];
+    maps.forEach(m => {
+      const best = getEndlessBest(m.key);
+      const card = document.createElement('div');
+      card.className = 'campaign-card';
+      card.innerHTML = `
+        <div class="campaign-icon">${m.icon}</div>
+        <div class="campaign-info">
+          <div class="campaign-name">${m.name}</div>
+          <div class="campaign-sub">${m.desc}</div>
+          <div class="campaign-desc">🏆 最高记录: ${best} 波</div>
+        </div>
+        <div class="campaign-badge available">无尽</div>
+      `;
+      card.addEventListener('click', () => {
+        if (callbacks.onRestart) callbacks.onRestart('endless:' + m.key);
+        showGame();
+      });
+      campaignGrid.appendChild(card);
+    });
+
+    // 返回按钮
+    const backRow = document.createElement('div');
+    backRow.style.cssText = 'margin-top:12px;';
+    backRow.innerHTML = '<button class="campaign-back-btn" id="endlessBackBtn">← 返回战役选择</button>';
+    backRow.querySelector('button').addEventListener('click', showCampaignSelect);
+    campaignGrid.appendChild(backRow);
   }
 
   // ====== 关卡网格渲染 ======
@@ -680,7 +747,7 @@ export function setupUI(game, callbacks) {
   canvas.addEventListener('click', (e) => {
     if (game.menuOpen) return;
     if (game.paused && !game.gameOver && !game.gameWin && !game.levelComplete) { togglePause(); return; }
-    if (game.gameOver) { callbacks.onRestart(); return; }
+    if (game.gameOver) { callbacks.onRestart(game.endless ? ('endless:' + (game.endlessMap || 'rhine')) : 0); return; }
     if (game.gameWin) return;
     if (game.levelComplete) { callbacks.onAdvanceLevel(); return; }
     const { x, y } = getCanvasCoords(e.clientX, e.clientY);
@@ -741,7 +808,7 @@ export function setupUI(game, callbacks) {
     if (game.menuOpen) return;
     if (game.paused) { togglePause(); }
     if (confirm('确定要重新开始本关吗？当前进度将丢失。')) {
-      callbacks.onRestart(game.endless ? 'endless' : game.levelIndex);
+      callbacks.onRestart(game.endless ? ('endless:' + (game.endlessMap || 'rhine')) : game.levelIndex);
       updateUI(); buildWaveBadges(); updateTowerButtonLocks();
       updateButtonState(); updateTimerDisplay();
     }

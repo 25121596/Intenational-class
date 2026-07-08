@@ -190,8 +190,8 @@ const ui = setupUI(game, {
   onMenuReturn() { ui.showMainMenu(); },
   onPause() { /* handled in ui.js */ },
   onRestart(idx) {
-    const levelIdx = typeof idx === 'number' ? idx : 0;
-    loadLevel(game, levelIdx);
+    if (typeof idx === 'string') { loadLevel(game, idx); }
+    else { loadLevel(game, typeof idx === 'number' ? idx : 0); }
     game._bossMusicPlaying = false;
     // 根据战役切换音乐
     const cid = game.activeCampaign;

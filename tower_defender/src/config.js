@@ -320,14 +320,28 @@ export function generateEndlessWave(waveNum) {
   return { name, spawnInterval: interval, availablePaths, enemies, endless: true };
 }
 
-export const ENDLESS_LEVEL = {
-  campaignId: 'endless',
-  name: '无尽 · 莱茵河防线', desc: '莱茵河大桥 · 无限波次生存',
-  endless: true,
-  startGold: 340, startHp: 30,
-  paths: LEVELS[2].paths,
-  river: LEVELS[2].river,
-  towerSlots: LEVELS[2].towerSlots,
-  availableTowers: ['machine', 'infantry', 'cannon', 'howitzer', 'defender', 'aa'],
-  waves: [],
+export const ENDLESS_LEVELS = {
+  rhine: {
+    id: 'rhine', campaignId: 'endless',
+    name: '无尽 · 莱茵河防线', desc: '莱茵河大桥 · 无限波次生存',
+    startGold: 340, startHp: 30,
+    paths: LEVELS[2].paths,
+    river: LEVELS[2].river,
+    towerSlots: LEVELS[2].towerSlots,
+    availableTowers: ['machine', 'infantry', 'cannon', 'howitzer', 'defender', 'aa'],
+    waves: [],
+  },
+  stalingrad: {
+    id: 'stalingrad', campaignId: 'endless',
+    name: '无尽 · 斯大林格勒', desc: '城市巷战 · 无限波次生存',
+    theme: 'snow',
+    startGold: 360, startHp: 30,
+    paths: LEVELS[3].paths,
+    towerSlots: LEVELS[3].towerSlots,
+    availableTowers: ['machine', 'infantry', 'cannon', 'howitzer', 'defender', 'aa'],
+    waves: [],
+  },
 };
+
+// 兼容旧代码
+export const ENDLESS_LEVEL = ENDLESS_LEVELS.rhine;

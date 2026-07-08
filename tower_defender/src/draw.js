@@ -1,5 +1,5 @@
 import { TOWER_DEFS, BLOCKER_DEFS, PATH_NAMES, PATH_ENTRY_COLORS, getUnitDisplayName } from './config.js';
-import { getPositionOnPath, findNearestFreeSlot } from './helpers.js';
+import { getEnemyPos, findNearestFreeSlot } from './helpers.js';
 
 // ---- 莱茵河绘制 ----
 function drawRiver(game, ctx, canvasW, canvasH) {
@@ -228,7 +228,7 @@ function drawHoverTooltip(game, ctx, canvasW, canvasH) {
   if (!target) {
     for (const e of game.enemies) {
       if (e.isDead && e.dyingTimer <= 0) continue;
-      const pos = getPositionOnPath(e.progress, e.pathIndex, game);
+      const pos = getEnemyPos(e, game);
       const cy = e.flying ? pos.y - 28 : pos.y;
       if (Math.hypot(pos.x - mx, cy - my) < e.size + 8) {
         const names = { rifleman:'步兵', assault:'突击兵', armored:'装甲兵', tank:'坦克', boss_tank:'红坦克', maus:'鼠式坦克', plane:'轰炸机', medic:'医疗兵' };
@@ -617,7 +617,7 @@ export function draw(game, ctx, canvasW, canvasH) {
     ctx.fillStyle = fa > 0 ? '#ff8888' : b.color; ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2); ctx.stroke();
     let aimAngle = 0, hasTarget = false;
-    for (const e of game.enemies) { if (e.blockingUnit === b && !e.isDead) { const ep = getPositionOnPath(e.progress, e.pathIndex, game); aimAngle = Math.atan2(ep.y - b.y, ep.x - b.x); hasTarget = true; break; } }
+    for (const e of game.enemies) { if (e.blockingUnit === b && !e.isDead) { const ep = getEnemyPos(e, game); aimAngle = Math.atan2(ep.y - b.y, ep.x - b.x); hasTarget = true; break; } }
     if (hasTarget) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(b.x + Math.cos(aimAngle) * b.size * 0.4, b.y + Math.sin(aimAngle) * b.size * 0.4); ctx.lineTo(b.x + Math.cos(aimAngle) * (b.size + 6), b.y + Math.sin(aimAngle) * (b.size + 6)); ctx.stroke(); ctx.lineCap = 'butt'; }
     ctx.fillStyle = '#fff'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
     const shortName = getUnitDisplayName(b.type, game.activeCampaign);
@@ -663,7 +663,7 @@ export function draw(game, ctx, canvasW, canvasH) {
     for (const e of game.enemies) {
       if (e.isDead) continue;
       if (e.flying && !tower.canTargetFlying) continue;
-      const pos = getPositionOnPath(e.progress, e.pathIndex, game);
+      const pos = getEnemyPos(e, game);
       const d = Math.hypot(pos.x - tower.x, pos.y - tower.y);
       if (d < tower.range && d < minDist) { minDist = d; aimAngle = Math.atan2(pos.y - tower.y, pos.x - tower.x); }
     }
@@ -679,8 +679,12 @@ export function draw(game, ctx, canvasW, canvasH) {
     ctx.scale(buildScale, buildScale);
     ctx.translate(-tower.x, -tower.y);
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 10]);
-    ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.range, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    // 仅悬停时显示攻击范围
+    const hovered = Math.hypot(tower.x - game.mouseX, tower.y - game.mouseY) < tower.size + 6;
+    if (hovered && !game.sellMode && !game.upgradeMode) {
+      ctx.strokeStyle = 'rgba(111,180,255,0.3)'; ctx.lineWidth = 2; ctx.setLineDash([6, 10]);
+      ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.range, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
     if (game.sellMode) { ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.size + 8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(tower.x + 2, tower.y + 3, tower.size + 2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = tf > 0 ? '#ff8888' : tower.color; ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.size, 0, Math.PI * 2); ctx.fill();
@@ -715,7 +719,7 @@ export function draw(game, ctx, canvasW, canvasH) {
   // 敌人
   for (const e of game.enemies) {
     if (e.isDead && e.dyingTimer <= 0) continue;
-    const pos = getPositionOnPath(e.progress, e.pathIndex, game);
+    const pos = getEnemyPos(e, game);
     const cy = e.flying ? pos.y - 28 : pos.y;
 
     // 死亡动画：缩小 + 淡出
@@ -921,9 +925,15 @@ export function draw(game, ctx, canvasW, canvasH) {
   if (game.gameOver) {
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 42px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('💀 防线崩溃', canvasW / 2, canvasH / 2 - 10);
+    ctx.fillText('💀 防线崩溃', canvasW / 2, canvasH / 2 - 20);
     ctx.fillStyle = '#fff'; ctx.font = '18px sans-serif';
-    ctx.fillText('点击画布重新开始战役', canvasW / 2, canvasH / 2 + 35); ctx.textAlign = 'start';
+    if (game.endless) {
+      ctx.fillText(`无尽模式 · 坚持了 ${game.wave} 波`, canvasW / 2, canvasH / 2 + 20);
+      ctx.fillText('点击画布重新挑战', canvasW / 2, canvasH / 2 + 50);
+    } else {
+      ctx.fillText('点击画布重新开始战役', canvasW / 2, canvasH / 2 + 35);
+    }
+    ctx.textAlign = 'start';
   }
   if (game.gameWin && game.announcementTimer < 60) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, canvasW, canvasH);
