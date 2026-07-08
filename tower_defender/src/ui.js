@@ -1,4 +1,5 @@
 import { TOWER_DEFS, BLOCKER_DEFS, LEVELS, CAMPAIGNS, getUnitDisplayName, generateEndlessWave } from './config.js';
+import { toggleMute, isMuted } from './music.js';
 
 // ---- 存档系统 ----
 const SAVE_KEY = 'iron_hearts_saves_v2';
@@ -56,6 +57,7 @@ export function setupUI(game, callbacks) {
   const nextWaveBtn = document.getElementById('nextWaveBtn');
   const sellModeBtn = document.getElementById('sellModeBtn');
   const pauseBtn = document.getElementById('pauseBtn');
+  const muteBtn = document.getElementById('muteBtn');
   const restartBtn = document.getElementById('restartBtn');
   const timerStat = document.getElementById('timerStat');
   const timerDisplay = document.getElementById('timerDisplay');
@@ -268,6 +270,7 @@ export function setupUI(game, callbacks) {
   function showCampaignSelect() {
     hideAllOverlays();
     campaignOverlay.classList.remove('hidden');
+    game.menuOpen = true; game.paused = false;
     renderCampaignGrid();
   }
 
@@ -598,6 +601,10 @@ export function setupUI(game, callbacks) {
   }
 
   pauseBtn.addEventListener('click', togglePause);
+  muteBtn.addEventListener('click', () => {
+    const nowMuted = toggleMute();
+    muteBtn.textContent = nowMuted ? '🔇' : '🔊';
+  });
   sellModeBtn.addEventListener('click', () => {
     if (game.menuOpen || game.paused) return;
     game.sellMode = !game.sellMode;

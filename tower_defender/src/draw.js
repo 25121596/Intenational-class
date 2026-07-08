@@ -356,6 +356,22 @@ export function draw(game, ctx, canvasW, canvasH) {
     }
   }
 
+  // ---- 云朵 ----
+  for (const c of game.clouds || []) {
+    ctx.fillStyle = `rgba(255,255,255,${c.alpha})`;
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(c.x - c.w * 0.25, c.y + 4, c.w * 0.3, c.h * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(c.x + c.w * 0.2, c.y - 2, c.w * 0.35, c.h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ---- 飞鸟 ----
+  for (const b of game.birds || []) {
+    const wingFlap = Math.sin(b.wing) * 3;
+    ctx.strokeStyle = '#1a1a20'; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(b.x - b.size, b.y + wingFlap);
+    ctx.lineTo(b.x, b.y); ctx.lineTo(b.x + b.size, b.y + wingFlap); ctx.stroke();
+  }
+
   // ---- 莱茵河渲染 ----
   if (game.level.river) {
     drawRiver(game, ctx, canvasW, canvasH);

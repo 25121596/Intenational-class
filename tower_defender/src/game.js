@@ -6,6 +6,7 @@ import {
   computePathLengths, getPositionOnPath, findNearestPathPoint, findNearestFreeSlot,
   spawnParticles, updateParticles, generateTrees, generateRoadStones,
   spawnEnemy, buildSpawnQueue, getEnemyMoveAmount,
+  generateClouds, updateClouds, generateBirds, updateBirds,
 } from './helpers.js';
 import { playShoot, playExplosion, playDeath, playWaveStart, playPerfect, playUpgrade } from './audio.js';
 
@@ -60,6 +61,7 @@ export function createGameState() {
     waveAutoTimer: -1, waveAutoTotal: 0,
     paused: false, menuOpen: true,
     trees: [], roadStones: [],
+    clouds: [], birds: [],
     activeCampaign: null,
     difficulty: 'private',
     endless: false,
@@ -103,6 +105,8 @@ export function loadLevel(game, index) {
   game.slots = game.level.towerSlots.map(s => ({ x: s.x, y: s.y, occupied: false, tower: null }));
   game.trees = generateTrees(game.level, 900, 600);
   game.roadStones = generateRoadStones(game.level.paths);
+  game.clouds = generateClouds(900, 600);
+  game.birds = generateBirds(900, 600);
   game.hp = game.level.startHp;
   game.gold = game.level.startGold;
   game.wave = 1; game.kills = 0;
@@ -612,6 +616,9 @@ export function update(game) {
 
   // 空袭冷却
   if (game.airstrikeCd > 0) game.airstrikeCd--;
+
+  // 地形装饰更新
+  if (!game.menuOpen) { updateClouds(game.clouds, 900); updateBirds(game.birds, 900, 600); }
 
   // 敌方炮弹飞行
   for (let i = game.enemyProjectiles.length - 1; i >= 0; i--) {

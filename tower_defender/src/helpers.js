@@ -168,6 +168,12 @@ export function spawnEnemy(game, enemyDef, pathIndex) {
     enemy.skillCooldown = 600;
     enemy.skillInterval = 1200;
   }
+  // 出场特效：路径入口散发烟雾粒子
+  const entryP = game.level.paths[pathIndex][0];
+  const fx = entryP.x < 0 ? 14 : entryP.x;
+  spawnParticles(game, fx, entryP.y, 10, '#888', [0.4, 1.2], [8, 18]);
+  spawnParticles(game, fx, entryP.y, 5, '#fff', [0.2, 0.8], [4, 10]);
+
   game.enemies.push(enemy);
   return enemy;
 }
@@ -190,6 +196,52 @@ export function buildSpawnQueue(game, cfg) {
     [queue[i], queue[j]] = [queue[j], queue[i]];
   }
   return queue;
+}
+
+// ---- 地形装饰 ----
+export function generateClouds(canvasW, canvasH) {
+  const clouds = [];
+  for (let i = 0; i < 6; i++) {
+    clouds.push({
+      x: Math.random() * canvasW,
+      y: 20 + Math.random() * 140,
+      w: 60 + Math.random() * 100,
+      h: 18 + Math.random() * 22,
+      speed: 0.15 + Math.random() * 0.35,
+      alpha: 0.08 + Math.random() * 0.1,
+    });
+  }
+  return clouds;
+}
+
+export function updateClouds(clouds, canvasW) {
+  for (const c of clouds) {
+    c.x += c.speed;
+    if (c.x > canvasW + 120) c.x = -c.w - 20;
+  }
+}
+
+export function generateBirds(canvasW, canvasH) {
+  const birds = [];
+  for (let i = 0; i < 5; i++) {
+    birds.push({
+      x: Math.random() * canvasW,
+      y: 30 + Math.random() * 100,
+      vx: 0.4 + Math.random() * 0.8,
+      vy: (Math.random() - 0.5) * 0.3,
+      wing: Math.random() * Math.PI * 2,
+      size: 4 + Math.random() * 3,
+    });
+  }
+  return birds;
+}
+
+export function updateBirds(birds, canvasW, canvasH) {
+  for (const b of birds) {
+    b.x += b.vx; b.y += b.vy;
+    b.wing += 0.08;
+    if (b.x > canvasW + 30) { b.x = -30; b.y = 30 + Math.random() * 100; }
+  }
 }
 
 // ---- 单位移动速度 ----

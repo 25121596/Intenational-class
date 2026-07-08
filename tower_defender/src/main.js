@@ -5,8 +5,9 @@ import { createGameState, loadLevel, startWave,
 import { draw } from './draw.js';
 import { setupUI } from './ui.js';
 import { LEVELS, CAMPAIGNS, TOWER_DEFS } from './config.js';
-import { computePathLengths, generateTrees, generateRoadStones, findNearestFreeSlot } from './helpers.js';
+import { computePathLengths, generateTrees, generateRoadStones, findNearestFreeSlot, generateClouds, generateBirds } from './helpers.js';
 import { initAudio } from './audio.js';
+import { ensureMusicLoaded, switchTrack, playBossMusic, stopBossMusic, updateMusic, toggleMute, isMuted } from './music.js';
 
 const game = createGameState();
 const canvas = document.getElementById('gameCanvas');
@@ -27,8 +28,9 @@ function getNextLevelInCampaign(g) {
 
 const ui = setupUI(game, {
   onCanvasClick(x, y) {
-    // 初始化音效（首次交互）
+    // 初始化音效+音乐（首次交互）
     initAudio();
+    ensureMusicLoaded();
 
     // 空袭瞄准中：点击地图投放
     if (game.airstrikeArming) {
@@ -167,6 +169,10 @@ const ui = setupUI(game, {
   onRestart(idx) {
     const levelIdx = typeof idx === 'number' ? idx : 0;
     loadLevel(game, levelIdx);
+    game._bossMusicPlaying = false;
+    // 根据战役切换音乐
+    const cid = game.activeCampaign;
+    switchTrack(cid === 'europe' ? 'europe' : cid === 'soviet' ? 'soviet' : cid === 'germany' ? 'germany' : 'menu');
     ui.selectUnit(game.selectedType);
     ui.buildWaveBadges(); ui.updateTowerButtonLocks();
     ui.updateUI(); ui.updateButtonState(); ui.updateTimerDisplay();
@@ -194,6 +200,8 @@ game.pathLengths = computePathLengths(game.level.paths);
 game.slots = game.level.towerSlots.map(s => ({ x: s.x, y: s.y, occupied: false, tower: null }));
 game.trees = generateTrees(game.level, 900, 600);
 game.roadStones = generateRoadStones(game.level.paths);
+game.clouds = generateClouds(900, 600);
+game.birds = generateBirds(900, 600);
 game.hp = game.level.startHp;
 game.gold = game.level.startGold;
 game.wave = 1;
@@ -245,6 +253,25 @@ function gameLoop(timestamp) {
     game.shakeY = Math.cos(game.frame * 1.3) * s;
     game.shakeTimer--;
   } else { game.shakeX = 0; game.shakeY = 0; }
+
+  // 音乐状态检测
+  updateMusic();
+  if (game.menuOpen) {
+    if (game._lastMusicContext !== 'menu') {
+      game._lastMusicContext = 'menu';
+      game._bossMusicPlaying = false;
+      switchTrack('menu');
+    }
+  } else {
+    if (game.bossEnemy && !game.bossEnemy.isDead && !game._bossMusicPlaying) {
+      game._bossMusicPlaying = true;
+      playBossMusic();
+    }
+    if ((!game.bossEnemy || game.bossEnemy.isDead) && game._bossMusicPlaying) {
+      game._bossMusicPlaying = false;
+      stopBossMusic();
+    }
+  }
 
   ctx.save();
   if (game.shakeX || game.shakeY) ctx.translate(game.shakeX, game.shakeY);
