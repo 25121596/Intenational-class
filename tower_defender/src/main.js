@@ -1,6 +1,6 @@
 import './style.css';
 import { createGameState, loadLevel, startWave,
-         placeTower, placeBlocker, sellUnit, forceSpawnEnemy, update, startUpgrade, getUpgradeCost,
+         placeTower, placeBlocker, sellUnit, update, startUpgrade, getUpgradeCost,
          armAirstrike, triggerAirstrike } from './game.js';
 import { draw } from './draw.js';
 import { setupUI } from './ui.js';
@@ -160,9 +160,7 @@ const ui = setupUI(game, {
       }
       return;
     }
-    if (game.isWaveActive) { forceSpawnEnemy(game); }
-    else { game.waveAutoTimer = -1; game.waveAutoTotal = 0; ui.updateTimerDisplay(); ui.updateButtonState(); startWave(game); }
-    ui.updateWaveBadges(); ui.updateButtonState(); ui.updateUI();
+    if (!game.isWaveActive) { game.waveAutoTimer = -1; game.waveAutoTotal = 0; ui.updateTimerDisplay(); ui.updateButtonState(); startWave(game); ui.updateWaveBadges(); ui.updateButtonState(); ui.updateUI(); }
   },
   onMenuReturn() { ui.showMainMenu(); },
   onPause() { /* handled in ui.js */ },
@@ -240,7 +238,18 @@ function gameLoop(timestamp) {
     ui.updateTimerDisplay();
   }
 
+  // 屏幕震动
+  if (game.shakeTimer > 0) {
+    const s = game.shakeIntensity * (game.shakeTimer / game.shakeMax);
+    game.shakeX = Math.sin(game.frame * 1.7) * s;
+    game.shakeY = Math.cos(game.frame * 1.3) * s;
+    game.shakeTimer--;
+  } else { game.shakeX = 0; game.shakeY = 0; }
+
+  ctx.save();
+  if (game.shakeX || game.shakeY) ctx.translate(game.shakeX, game.shakeY);
   draw(game, ctx, 900, 600);
+  ctx.restore();
   requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);

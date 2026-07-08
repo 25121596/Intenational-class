@@ -158,7 +158,7 @@ export function spawnEnemy(game, enemyDef, pathIndex) {
     rRange: enemyDef.range || 0, rDmg: enemyDef.rDmg || 0,
     rInterval: enemyDef.rInterval || 60, rCooldown: 0,
     rSpeed: enemyDef.rSpeed || 3, rColor: enemyDef.rColor || '#ff4444', rSize: enemyDef.rSize || 5,
-    flying: enemyDef.flying || false,
+    flying: enemyDef.flying || false, dyingTimer: 0,
     healer: enemyDef.healer || false,
     healRange: enemyDef.healRange || 0, healAmount: enemyDef.healAmount || 0,
     healInterval: enemyDef.healInterval || 60, healCooldown: 0,

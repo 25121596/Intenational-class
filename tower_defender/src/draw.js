@@ -479,6 +479,19 @@ export function draw(game, ctx, canvasW, canvasH) {
   for (const b of game.blockers) {
     let blockedCount = 0;
     for (const e of game.enemies) { if (e.blockingUnit === b && !e.isDead) blockedCount++; }
+
+    // 建造动画
+    let bs = 1, ba = 1;
+    if (b.buildAnim > 0) {
+      bs = 0.4 + 0.6 * (1 - b.buildAnim / 18);
+      ba = 0.3 + 0.7 * (1 - b.buildAnim / 18);
+      b.buildAnim--;
+    }
+
+    ctx.save();
+    ctx.globalAlpha *= ba;
+    ctx.translate(b.x, b.y); ctx.scale(bs, bs); ctx.translate(-b.x, -b.y);
+
     if (blockedCount > 0) { ctx.strokeStyle = 'rgba(255,80,80,0.4)'; ctx.lineWidth = 3; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(b.x, b.y, b.size + 8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(b.x + 2, b.y + 3, b.size * 0.9, b.size * 0.55, 0, 0, Math.PI * 2); ctx.fill();
     const fa = b.flashTimer > 0 ? b.flashTimer / 8 : 0;
@@ -509,39 +522,71 @@ export function draw(game, ctx, canvasW, canvasH) {
       ctx.strokeStyle = 'rgba(255,215,0,0.7)'; ctx.lineWidth = 2.5; ctx.setLineDash([4, 3]);
       ctx.beginPath(); ctx.arc(b.x, b.y, b.size + 9, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
+
+    ctx.restore();
   }
 
   // 塔
   for (const tower of game.towers) {
     if (tower.isDead) continue;
     const tf = tower.flashTimer > 0 ? tower.flashTimer / 6 : 0;
+
+    // 建造动画：渐显 + 放大
+    let buildScale = 1, buildAlpha = 1;
+    if (tower.buildAnim > 0) {
+      buildScale = 0.4 + 0.6 * (1 - tower.buildAnim / 18);
+      buildAlpha = 0.3 + 0.7 * (1 - tower.buildAnim / 18);
+      tower.buildAnim--;
+    }
+
+    // 索敌+平滑旋转
+    let aimAngle = tower.angle || 0, minDist = Infinity;
+    for (const e of game.enemies) {
+      if (e.isDead) continue;
+      if (e.flying && !tower.canTargetFlying) continue;
+      const pos = getPositionOnPath(e.progress, e.pathIndex, game);
+      const d = Math.hypot(pos.x - tower.x, pos.y - tower.y);
+      if (d < tower.range && d < minDist) { minDist = d; aimAngle = Math.atan2(pos.y - tower.y, pos.x - tower.x); }
+    }
+    // 平滑旋转 (每帧最多转 0.12 弧度 ≈ 7°)
+    let diff = aimAngle - tower.angle;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    tower.angle += Math.max(-0.12, Math.min(0.12, diff));
+
+    ctx.save();
+    ctx.globalAlpha *= buildAlpha;
+    ctx.translate(tower.x, tower.y);
+    ctx.scale(buildScale, buildScale);
+    ctx.translate(-tower.x, -tower.y);
+
     ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 10]);
     ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.range, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     if (game.sellMode) { ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.size + 8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(tower.x + 2, tower.y + 3, tower.size + 2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = tf > 0 ? '#ff8888' : tower.color; ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.size, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.size, 0, Math.PI * 2); ctx.stroke();
-    // 常驻血条（始终显示）
+    // 炮管
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath();
+    ctx.moveTo(tower.x + Math.cos(tower.angle) * tower.size * 0.45, tower.y + Math.sin(tower.angle) * tower.size * 0.45);
+    ctx.lineTo(tower.x + Math.cos(tower.angle) * (tower.size + 7), tower.y + Math.sin(tower.angle) * (tower.size + 7)); ctx.stroke(); ctx.lineCap = 'butt';
+
+    ctx.restore();
+
+    // 常驻血条
     const tw = tower.size * 2.4, th = 5, ty = tower.y - tower.size - 10;
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(tower.x - tw / 2, ty, tw, th);
     const tpct = Math.max(0, tower.hp / tower.maxHp);
     ctx.fillStyle = tpct > 0.5 ? '#4ade80' : '#facc15'; ctx.fillRect(tower.x - tw / 2, ty, tw * tpct, th);
     ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 0.6; ctx.strokeRect(tower.x - tw / 2, ty, tw, th);
-    // 升级星星
     if (tower.upgradeLevel > 0) {
       ctx.fillStyle = '#ffd700'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('⭐'.repeat(tower.upgradeLevel), tower.x, ty - 6);
     }
-    // 升级模式高亮
     if (game.upgradeMode && tower.upgradeLevel < 3) {
       ctx.strokeStyle = 'rgba(255,215,0,0.7)'; ctx.lineWidth = 2.5; ctx.setLineDash([4, 3]);
       ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.size + 9, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
-    let aimAngle = 0, minDist = Infinity;
-    for (const e of game.enemies) { if (e.isDead) continue; const pos = getPositionOnPath(e.progress, e.pathIndex, game); const d = Math.hypot(pos.x - tower.x, pos.y - tower.y); if (d < minDist) { minDist = d; aimAngle = Math.atan2(pos.y - tower.y, pos.x - tower.x); } }
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath();
-    ctx.moveTo(tower.x + Math.cos(aimAngle) * tower.size * 0.45, tower.y + Math.sin(aimAngle) * tower.size * 0.45);
-    ctx.lineTo(tower.x + Math.cos(aimAngle) * (tower.size + 7), tower.y + Math.sin(aimAngle) * (tower.size + 7)); ctx.stroke(); ctx.lineCap = 'butt';
     ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
     const tShort = getUnitDisplayName(tower.type, game.activeCampaign);
     const tAbbrev = tShort.length > 5 ? tShort.substring(0, 5) : tShort;
@@ -550,9 +595,22 @@ export function draw(game, ctx, canvasW, canvasH) {
 
   // 敌人
   for (const e of game.enemies) {
-    if (e.isDead) continue;
+    if (e.isDead && e.dyingTimer <= 0) continue;
     const pos = getPositionOnPath(e.progress, e.pathIndex, game);
     const cy = e.flying ? pos.y - 28 : pos.y;
+
+    // 死亡动画：缩小 + 淡出
+    let deathScale = 1, deathAlpha = 1;
+    if (e.dyingTimer > 0) {
+      const t = e.dyingTimer / 24;
+      deathScale = 0.3 + 0.7 * t;
+      deathAlpha = t;
+    }
+    ctx.save();
+    if (deathScale < 1 || deathAlpha < 1) {
+      ctx.globalAlpha *= deathAlpha;
+      ctx.translate(pos.x, cy); ctx.scale(deathScale, deathScale); ctx.translate(-pos.x, -cy);
+    }
     if (e.flying) {
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
       ctx.beginPath(); ctx.ellipse(pos.x, pos.y + 3, e.size * 0.9, e.size * 0.4, 0, 0, Math.PI * 2); ctx.fill();
@@ -613,16 +671,31 @@ export function draw(game, ctx, canvasW, canvasH) {
       ctx.fillText('✚', pos.x, cy - e.size - 22);
       ctx.textAlign = 'start';
     }
+    ctx.restore();
   }
 
   // 子弹
   for (const p of game.projectiles) {
+    // 尾迹
+    if (p.px !== undefined) {
+      ctx.fillStyle = p.color; ctx.globalAlpha = 0.25;
+      ctx.beginPath(); ctx.arc(p.px, p.py, p.size * 0.6, 0, Math.PI * 2); ctx.fill();
+      const mx = (p.x + p.px) / 2, my = (p.y + p.py) / 2;
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath(); ctx.arc(mx, my, p.size * 0.75, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.save(); ctx.shadowColor = p.color; ctx.shadowBlur = 12;
     ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(p.x - p.size * 0.3, p.y - p.size * 0.2, p.size * 0.5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
   for (const ep of game.enemyProjectiles) {
+    if (ep.px !== undefined) {
+      ctx.fillStyle = ep.color; ctx.globalAlpha = 0.2;
+      ctx.beginPath(); ctx.arc(ep.px, ep.py, ep.size * 0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.save(); ctx.shadowColor = ep.color; ctx.shadowBlur = 14;
     ctx.fillStyle = ep.color; ctx.beginPath(); ctx.arc(ep.x, ep.y, ep.size, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(255,200,150,0.4)'; ctx.beginPath(); ctx.arc(ep.x - ep.size * 0.3, ep.y - ep.size * 0.2, ep.size * 0.5, 0, Math.PI * 2); ctx.fill();

@@ -68,7 +68,15 @@ export function createGameState() {
     levelStars: 0, isPerfectClear: false,
     goldTickTimer: 0,
     towersPlaced: 0, blockersPlaced: 0, unitsLost: 0, goldEarned: 0,
+    shakeX: 0, shakeY: 0, shakeTimer: 0, shakeIntensity: 0, shakeMax: 0,
   };
+}
+
+// ---- 屏幕震动 ----
+export function triggerShake(game, intensity, duration) {
+  game.shakeIntensity = Math.max(game.shakeIntensity, intensity);
+  game.shakeTimer = Math.max(game.shakeTimer, duration);
+  game.shakeMax = Math.max(game.shakeMax, duration);
 }
 
 /** 计算星级：>=18血=3星, 6-17=2星, 1-5=1星 */
@@ -114,6 +122,7 @@ export function loadLevel(game, index) {
   game.menuOpen = false;
   game.paused = false;
   game.airstrikeArming = false; game.airstrikeCd = 0;
+  game.shakeX = 0; game.shakeY = 0; game.shakeTimer = 0; game.shakeIntensity = 0; game.shakeMax = 0;
   game.selectedType = game.level.availableTowers.includes('infantry') ? 'infantry' : game.level.availableTowers[0];
 }
 
@@ -247,7 +256,7 @@ function finalizeTowerDeployment(game, dep) {
     isSplash: def.isSplash, splashRadius: def.splashRadius, splashDamagePct: def.splashDamagePct,
     canTargetFlying: def.canTargetFlying || false,
     cooldownMax: def.cooldown, hp: def.hp, maxHp: def.hp, flashTimer: 0, isDead: false,
-    upgradeLevel: 0,
+    upgradeLevel: 0, angle: 0, buildAnim: 18,
   };
   game.towers.push(tower);
   slot.occupied = true; slot.tower = tower;
@@ -255,6 +264,20 @@ function finalizeTowerDeployment(game, dep) {
   spawnParticles(game, slot.x, slot.y, 16, '#ffffff', [0.8, 3], [10, 20]);
   game.announcement = '✅ 部署完成！';
   game.announcementTimer = 40;
+}
+
+// ---- 击杀辅助（统一死亡动画） ----
+function killEnemy(game, e) {
+  if (e.isDead || e.dyingTimer > 0) return;
+  e.dyingTimer = 24; // 0.4s 死亡动画
+  e.isDead = true;    // 标记死亡但不立即 splice
+  game.gold += e.reward;
+  game.goldEarned += e.reward;
+  game.kills++;
+  playDeath();
+  const ep = getPositionOnPath(e.progress, e.pathIndex, game);
+  spawnDamageNumber(game, ep.x, ep.y, `+${e.reward}💰`, '#ffd700');
+  spawnParticles(game, ep.x, ep.y, 14, '#ffcc44', [1.5, 4], [10, 22]);
 }
 
 // ---- 伤害数字 ----
@@ -284,7 +307,7 @@ function finalizeBlockerDeployment(game, dep) {
     type: dep.type, hp: def.hp, maxHp: def.hp, damage: def.damage,
     attackInterval: def.attackInterval, attackCooldown: 0,
     blockCount: def.blockCount, size: def.size, color: def.color,
-    isDead: false, flashTimer: 0, upgradeLevel: 0,
+    isDead: false, flashTimer: 0, upgradeLevel: 0, buildAnim: 18,
     rCooldown: def.rng ? def.rInterval : 0,
   });
   game.blockersPlaced++;
@@ -361,30 +384,6 @@ function finalizeUpgrade(game, dep) {
   game.announcementTimer = 50;
 }
 
-// ---- 提前出怪 ----
-export function forceSpawnEnemy(game) {
-  if (!game.isWaveActive || game.spawnQueue.length === 0) return;
-  const cfg = game.endless ? generateEndlessWave(game.wave) : game.level.waves[game.wave - 1];
-  // spawn 2-3 enemies at once for noticeable effect
-  const count = Math.min(3, Math.max(2, game.spawnQueue.length));
-  let spawned = 0;
-  for (let i = 0; i < count; i++) {
-    if (game.spawnQueue.length === 0) break;
-    const def = game.spawnQueue.shift();
-    const pathIdx = cfg.availablePaths[Math.floor(Math.random() * cfg.availablePaths.length)];
-    spawnEnemy(game, def, pathIdx);
-    game.spawnCount++;
-    spawned++;
-  }
-  const bonus = 40 + Math.floor(Math.random() * 41); // 40-80 金币奖励
-  game.gold += bonus;
-  const interval = Math.max(8, game.spawnInterval - Math.floor(game.spawnCount / 5));
-  game.spawnTimer = Math.floor(interval);
-  game.announcement = `⚡ 提前出怪 x${spawned}！+${bonus}💰`;
-  game.announcementTimer = 50;
-  spawnParticles(game, 450, 50, 16, '#ffd93d', [1.5, 4], [10, 20]);
-}
-
 // ---- 空袭技能 ----
 export function armAirstrike(game) {
   if (game.gameOver || game.gameWin || game.levelComplete || game.menuOpen || game.paused) return false;
@@ -401,15 +400,11 @@ export function triggerAirstrike(game, x, y) {
     const ep = getPositionOnPath(e.progress, e.pathIndex, game);
     if (Math.hypot(ep.x - x, ep.y - y) <= game.airstrikeRadius) {
       e.hp -= game.airstrikeDmg; hit++;
-      if (e.hp <= 0 && !e.isDead) {
-        e.isDead = true; game.gold += e.reward; game.goldEarned += e.reward; game.kills++;
-        playDeath();
-        spawnDamageNumber(game, ep.x, ep.y, `+${e.reward}💰`, '#ffd700');
-        spawnParticles(game, ep.x, ep.y, 14, '#ffcc44', [1.5, 4], [10, 22]);
-      }
+      if (e.hp <= 0 && !e.isDead) { killEnemy(game, e); }
     }
   }
   game.airstrikeCd = game.airstrikeMax;
+  triggerShake(game, 10, 25);
   spawnParticles(game, x, y, 40, '#ffaa44', [2, 6], [12, 30]);
   spawnParticles(game, x, y, 20, '#ff6633', [1, 4], [8, 20]);
   playExplosion();
@@ -483,6 +478,7 @@ export function update(game) {
       }
       game.announcement = '🐭 鼠式召唤增援！+2强化坦克';
       game.announcementTimer = 90;
+      triggerShake(game, 6, 20);
       const bossPos = getPositionOnPath(game.bossEnemy.progress, game.bossEnemy.pathIndex, game);
       spawnParticles(game, bossPos.x, bossPos.y, 30, '#ff3300', [2, 6], [12, 28]);
     }
@@ -496,19 +492,25 @@ export function update(game) {
       const cfg = game.endless ? generateEndlessWave(game.wave) : game.level.waves[game.wave - 1];
       const pathIdx = cfg.availablePaths[Math.floor(Math.random() * cfg.availablePaths.length)];
       spawnEnemy(game, def, pathIdx);
-      if (def.type === 'maus') { game.announcement = '🐭 鼠式坦克 正在逼近！'; game.announcementTimer = 150; }
+      if (def.type === 'maus') { game.announcement = '🐭 鼠式坦克 正在逼近！'; game.announcementTimer = 150; triggerShake(game, 8, 30); }
       game.spawnCount++;
       game.spawnTimer = Math.floor(Math.max(8, game.spawnInterval - Math.floor(game.spawnCount / 5)));
     }
   }
-  if (game.isWaveActive && game.spawnQueue.length === 0 && game.enemies.length === 0 && game.spawnCount >= game.spawnMax) {
+  const aliveEnemies = game.enemies.filter(e => !e.isDead || e.dyingTimer > 0).length;
+  if (game.isWaveActive && game.spawnQueue.length === 0 && aliveEnemies === 0 && game.spawnCount >= game.spawnMax) {
     completeWave(game);
+  }
+
+  // 敌人死亡动画计时
+  for (const e of game.enemies) {
+    if (e.dyingTimer > 0) e.dyingTimer--;
   }
 
   // 敌人移动 + 远程攻击
   for (let i = game.enemies.length - 1; i >= 0; i--) {
     const e = game.enemies[i];
-    if (e.isDead) { game.enemies.splice(i, 1); continue; }
+    if (e.dyingTimer > 0) continue; // 死亡动画中，跳过逻辑
 
     // 坦克远程攻击
     if (e.ranged && e.rCooldown <= 0) {
@@ -528,7 +530,7 @@ export function update(game) {
       }
       if (bestTarget) {
         game.enemyProjectiles.push({
-          x: ePos.x, y: ePos.y,
+          x: ePos.x, y: ePos.y, px: ePos.x, py: ePos.y,
           targetX: bestTarget.x, targetY: bestTarget.y,
           targetType: bestTarget.type, targetUnit: bestTarget.unit,
           speed: e.rSpeed, damage: e.rDmg, color: e.rColor, size: e.rSize,
@@ -631,6 +633,7 @@ export function update(game) {
       continue;
     }
     const step = Math.min(ep.speed, dist);
+    ep.px = ep.x; ep.py = ep.y;
     ep.x += (dx / dist) * step; ep.y += (dy / dist) * step;
   }
 
@@ -647,12 +650,7 @@ export function update(game) {
           const ePos = getPositionOnPath(e.progress, e.pathIndex, game);
           spawnDamageNumber(game, ePos.x, ePos.y, `-${b.damage}`, '#ff9944');
           spawnParticles(game, ePos.x, ePos.y, 4, '#ffdd55', [0.5, 2], [4, 10]);
-          if (e.hp <= 0 && !e.isDead) {
-            e.isDead = true; game.gold += e.reward; game.goldEarned += e.reward; game.kills++;
-            playDeath();
-            spawnDamageNumber(game, ePos.x, ePos.y, `+${e.reward}💰`, '#ffd700');
-            spawnParticles(game, ePos.x, ePos.y, 14, '#ffcc44', [1.5, 4], [10, 22]);
-          }
+          if (e.hp <= 0 && !e.isDead) { killEnemy(game, e); }
           break;
         }
       }
@@ -671,7 +669,7 @@ export function update(game) {
         }
         if (bestTarget) {
           game.projectiles.push({
-            x: b.x, y: b.y, targetEnemy: bestTarget.enemy,
+            x: b.x, y: b.y, px: b.x, py: b.y, targetEnemy: bestTarget.enemy,
             targetX: bestTarget.pos.x, targetY: bestTarget.pos.y,
             speed: def.rSpeed, damage: def.rDmg, color: def.rColor, size: def.rSize,
             isSplash: false, splashRadius: 0, splashDamagePct: 1,
@@ -698,7 +696,7 @@ export function update(game) {
     }
     if (bestTarget) {
       game.projectiles.push({
-        x: tower.x, y: tower.y,
+        x: tower.x, y: tower.y, px: tower.x, py: tower.y,
         targetEnemy: tower.isSplash ? null : bestTarget.enemy,
         targetX: bestTarget.pos.x, targetY: bestTarget.pos.y,
         speed: tower.bulletSpeed, damage: tower.damage, color: tower.bulletColor,
@@ -724,7 +722,7 @@ export function update(game) {
       if (p.isSplash) {
         spawnParticles(game, p.x, p.y, 20, '#ff8833', [2, 6], [12, 28]);
         spawnParticles(game, p.x, p.y, 10, '#ffcc44', [1, 3], [8, 18]);
-        playExplosion();
+        playExplosion(); triggerShake(game, 4, 10);
         for (const e of game.enemies) {
           if (e.isDead) continue;
           const ePos = getPositionOnPath(e.progress, e.pathIndex, game);
@@ -733,7 +731,7 @@ export function update(game) {
             const dmg = edist < 20 ? p.damage : Math.floor(p.damage * p.splashDamagePct);
             e.hp -= dmg;
             spawnDamageNumber(game, ePos.x, ePos.y, `-${dmg}`, '#ff8833');
-            if (e.hp <= 0 && !e.isDead) { e.isDead = true; game.gold += e.reward; game.goldEarned += e.reward; game.kills++; playDeath(); spawnDamageNumber(game, ePos.x, ePos.y, `+${e.reward}💰`, '#ffd700'); spawnParticles(game, ePos.x, ePos.y, 14, '#ffdd77', [1.5, 4], [10, 22]); }
+            if (e.hp <= 0 && !e.isDead) { killEnemy(game, e); }
           }
         }
       } else {
@@ -741,24 +739,19 @@ export function update(game) {
           p.targetEnemy.hp -= p.damage;
           spawnDamageNumber(game, p.x, p.y, `-${p.damage}`, '#ff6644');
           spawnParticles(game, p.x, p.y, 6, '#ffdd77', [0.8, 2.5], [6, 14]);
-          if (p.targetEnemy.hp <= 0 && !p.targetEnemy.isDead) {
-            p.targetEnemy.isDead = true; game.gold += p.targetEnemy.reward; game.goldEarned += p.targetEnemy.reward; game.kills++;
-            playDeath();
-            const ePos = getPositionOnPath(p.targetEnemy.progress, p.targetEnemy.pathIndex, game);
-            spawnDamageNumber(game, ePos.x, ePos.y, `+${p.targetEnemy.reward}💰`, '#ffd700');
-            spawnParticles(game, ePos.x, ePos.y, 16, '#ffcc44', [1.5, 4.5], [10, 24]);
-          }
+          if (p.targetEnemy.hp <= 0 && !p.targetEnemy.isDead) { killEnemy(game, p.targetEnemy); }
         }
       }
       game.projectiles.splice(i, 1);
       continue;
     }
     const step = Math.min(p.speed, dist);
+    p.px = p.x; p.py = p.y;
     p.x += (dx / dist) * step; p.y += (dy / dist) * step;
   }
 
   // 清理
-  game.enemies = game.enemies.filter(e => !e.isDead);
+  game.enemies = game.enemies.filter(e => !e.isDead || e.dyingTimer > 0);
   game.blockers = game.blockers.filter(b => {
     if (b.isDead) { for (const e of game.enemies) { if (e.blockingUnit === b) { e.blocked = false; e.blockingUnit = null; } } game.unitsLost++; spawnParticles(game, b.x, b.y, 20, '#ff4444', [1, 4], [10, 25]); return false; }
     return true;

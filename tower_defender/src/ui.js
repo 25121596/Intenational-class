@@ -146,11 +146,7 @@ export function setupUI(game, callbacks) {
       return;
     }
     if (game.isWaveActive) {
-      if (game.spawnQueue.length > 0) {
-        nextWaveBtn.disabled = false; nextWaveBtn.textContent = '⚡ 提前出怪 (+40~80💰)'; nextWaveBtn.classList.remove('auto-countdown');
-      } else {
         nextWaveBtn.disabled = true; nextWaveBtn.textContent = '🔥 战斗中...'; nextWaveBtn.classList.remove('auto-countdown');
-      }
     }
     else if (game.waveAutoTimer > 0) { nextWaveBtn.disabled = false; nextWaveBtn.textContent = `⚡ 下一波 (${Math.ceil(game.waveAutoTimer / 60)}s)`; nextWaveBtn.classList.add('auto-countdown'); }
     else { const totalW = game.endless ? '∞' : game.level.waves.length; nextWaveBtn.disabled = false; nextWaveBtn.textContent = `⚡ 下一波 (${game.wave}/${totalW})`; nextWaveBtn.classList.remove('auto-countdown'); }
@@ -550,7 +546,7 @@ export function setupUI(game, callbacks) {
   updateDiffButtons();
 
   function showTutorial() {
-    alert('🛡️ 钢铁之心 · Iron Hearts 0.5 Beta\n\n操作说明:\n\n远程单位(塔): 点击蓝色炮位放置（部署需0.8-1秒）\n近战单位(阻挡): 点击路径放置（部署需0.8-1秒）\n轻步兵: 挡1打1 | 掷弹兵/游骑兵: 挡2打1+远程\n升级: Shift+点击 或 U键升级模式 (伤害+25%/级 共3级)\n出售: 右键点击 或 S键出售（部署中也可取消）\n键盘1-5: 切换单位\n空格键: 暂停/继续\n下一波: 未出怪开始波次，战斗中提前出怪+40~80💰\n波次间隙每秒+1💰被动收入\n\n难度选择: 列兵(×1.0) / 中士(×1.15) / 上校(×1.4)\n星级评价: ⭐⭐⭐(HP≥18) ⭐⭐(HP 6-17) ⭐(HP 1-5)\n满血通关 = 完美作战！\n\n空袭技能(🛩️): 点击后选地图投放，范围伤害，冷却15秒\n飞行单位(✈): 只有高射炮(Flak)能打中，注意防空！\n医疗兵(✚): 会持续治疗周围敌人\n\n战役: 为了自由(4关) / 誓死坚守(1关) / 女武神的骑行(1关)');
+    alert('🛡️ 钢铁之心 · Iron Hearts 0.5 Beta\n\n操作说明:\n\n远程单位(塔): 点击蓝色炮位放置（部署需0.8-1秒）\n近战单位(阻挡): 点击路径放置（部署需0.8-1秒）\n轻步兵: 挡1打1 | 掷弹兵/游骑兵: 挡2打1+远程\n升级: Shift+点击 或 U键升级模式 (伤害+25%/级 共3级)\n出售: 右键点击 或 S键出售（部署中也可取消）\n键盘1-5: 切换单位\n空格键: 暂停/继续\n下一波: 波次间隙点击开始新一波\n波次间隙每秒+1💰被动收入\n\n难度选择: 列兵(×1.0) / 中士(×1.15) / 上校(×1.4)\n星级评价: ⭐⭐⭐(HP≥18) ⭐⭐(HP 6-17) ⭐(HP 1-5)\n满血通关 = 完美作战！\n\n空袭技能(🛩️): 点击后选地图投放，范围伤害，冷却15秒\n飞行单位(✈): 只有高射炮(Flak)能打中，注意防空！\n医疗兵(✚): 会持续治疗周围敌人\n\n战役: 为了自由(4关) / 誓死坚守(1关) / 女武神的骑行(1关)');
   }
 
   // 存档页面
