@@ -1,4 +1,4 @@
-import { TOWER_DEFS, BLOCKER_DEFS, LEVELS, CAMPAIGNS, getUnitDisplayName, generateEndlessWave } from './config.js';
+import { TOWER_DEFS, BLOCKER_DEFS, ENEMY_PROTO, LEVELS, CAMPAIGNS, getUnitDisplayName, generateEndlessWave, TOWER_BRANCHES } from './config.js';
 import { toggleMute, isMuted } from './music.js';
 
 // ---- 存档系统 ----
@@ -96,6 +96,12 @@ export function setupUI(game, callbacks) {
   const menuTutorialBtn2 = document.getElementById('menuTutorialBtn2');
   const menuReturnBtn = document.getElementById('menuReturnBtn');
 
+  // Encyclopedia
+  const encyOverlay = document.getElementById('encyclopediaOverlay');
+  const encyContent = document.getElementById('encyContent');
+  const encyTabs = document.getElementById('encyTabs');
+  const encyBackBtn = document.getElementById('encyBackBtn');
+
   // Blocker buttons (塔按钮已移除，改为点击炮位弹出菜单)
   const blockerButtons = {
     infantry: document.getElementById('btnInfantry'),
@@ -117,7 +123,13 @@ export function setupUI(game, callbacks) {
   // ====== UI 更新 ======
   function updateUI() {
     hpSpan.textContent = Math.max(0, Math.floor(game.hp));
-    goldSpan.textContent = Math.floor(game.gold);
+    const newGold = Math.floor(game.gold);
+    if (newGold !== parseInt(goldSpan.textContent)) {
+      goldSpan.parentElement.classList.remove('bounce');
+      void goldSpan.parentElement.offsetWidth; // reflow
+      goldSpan.parentElement.classList.add('bounce');
+    }
+    goldSpan.textContent = newGold;
     waveSpan.textContent = Math.min(game.wave, game.level.waves.length);
     waveMaxSpan.textContent = game.level.waves.length;
     killSpan.textContent = game.kills;
@@ -231,7 +243,7 @@ export function setupUI(game, callbacks) {
       airstrikeBtn.textContent = `🛩️ 空袭(${Math.ceil(game.airstrikeCd / 60)}s)`;
       airstrikeBtn.disabled = true;
     } else {
-      airstrikeBtn.textContent = '🛩️ 空袭';
+      airstrikeBtn.textContent = `🛩️ 空袭(${game.airstrikeDmg})`;
       airstrikeBtn.disabled = (game.gameOver || game.gameWin || game.levelComplete);
     }
   }
@@ -249,6 +261,7 @@ export function setupUI(game, callbacks) {
     saveOverlay.classList.add('hidden');
     campaignOverlay.classList.add('hidden');
     menuOverlay.classList.add('hidden');
+    encyOverlay.classList.add('hidden');
   }
 
   function showMainMenu() {
@@ -525,7 +538,6 @@ export function setupUI(game, callbacks) {
   // 主菜单
   mainStartBtn.addEventListener('click', showCampaignSelect);
   mainSaveMgrBtn.addEventListener('click', showSaveManager);
-  mainTutorialBtn.addEventListener('click', showTutorial);
   mainQuitBtn.addEventListener('click', () => {
     if (confirm('确定要退出游戏吗？')) document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#1a1e2a;color:#8892a8;font-family:sans-serif;font-size:1.2rem;">游戏已关闭，可关闭此标签页</div>';
   });
@@ -548,10 +560,6 @@ export function setupUI(game, callbacks) {
   // 初始同步难度按钮状态
   updateDiffButtons();
 
-  function showTutorial() {
-    alert('🛡️ 钢铁之心 · Iron Hearts 0.5 Beta\n\n操作说明:\n\n远程单位(塔): 点击蓝色炮位放置（部署需0.8-1秒）\n近战单位(阻挡): 点击路径放置（部署需0.8-1秒）\n轻步兵: 挡1打1 | 掷弹兵/游骑兵: 挡2打1+远程\n升级: Shift+点击 或 U键升级模式 (伤害+25%/级 共3级)\n出售: 右键点击 或 S键出售（部署中也可取消）\n键盘1-5: 切换单位\n空格键: 暂停/继续\n下一波: 波次间隙点击开始新一波\n波次间隙每秒+1💰被动收入\n\n难度选择: 列兵(×1.0) / 中士(×1.15) / 上校(×1.4)\n星级评价: ⭐⭐⭐(HP≥18) ⭐⭐(HP 6-17) ⭐(HP 1-5)\n满血通关 = 完美作战！\n\n空袭技能(🛩️): 点击后选地图投放，范围伤害，冷却15秒\n飞行单位(✈): 只有高射炮(Flak)能打中，注意防空！\n医疗兵(✚): 会持续治疗周围敌人\n\n战役: 为了自由(4关) / 誓死坚守(1关) / 女武神的骑行(1关)');
-  }
-
   // 存档页面
   saveBackBtn.addEventListener('click', showMainMenu);
   saveClearAllBtn.addEventListener('click', () => {
@@ -567,14 +575,111 @@ export function setupUI(game, callbacks) {
 
   // 关卡选择
   menuBackToCampaignBtn.addEventListener('click', showCampaignSelect);
-  menuTutorialBtn2.addEventListener('click', showTutorial);
 
   // 返回主菜单按钮(游戏内)
   menuReturnBtn.addEventListener('click', showMainMenu);
 
+  // ---- 图鉴 ----
+  function showEncyclopedia(fromPage) {
+    hideAllOverlays();
+    encyOverlay.classList.remove('hidden');
+    game.menuOpen = true; game.paused = false;
+    renderEncyTab('friendly');
+  }
+
+  function renderEncyTab(tab) {
+    encyTabs.querySelectorAll('.ency-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    if (tab === 'friendly') renderFriendlyTab();
+    else if (tab === 'enemy') renderEnemyTab();
+    else if (tab === 'skills') renderSkillsTab();
+    else if (tab === 'hotkeys') renderHotkeysTab();
+  }
+
+  function renderFriendlyTab() {
+    const units = [
+      ...Object.entries(TOWER_DEFS).map(([k, v]) => ({ ...v, key: k, isTower: true })),
+      ...Object.entries(BLOCKER_DEFS).map(([k, v]) => ({ ...v, key: k, isTower: false })),
+    ];
+    encyContent.innerHTML = units.map(u => {
+      const branches = u.isTower ? TOWER_BRANCHES[u.key] : null;
+      const branchHTML = branches ? `
+        <div class="ec-desc" style="margin-top:4px;color:#ffd700;">🔀 3级分支:</div>
+        <div class="ec-stats" style="color:#b89840;">
+          ${branches.a.icon} ${branches.a.name}: ${branches.a.desc}<br>
+          ${branches.b.icon} ${branches.b.name}: ${branches.b.desc}
+        </div>` : '';
+      return `
+      <div class="ency-card">
+        <div class="ec-name">${u.isTower ? '🏰' : '🛡️'} ${u.name}</div>
+        <div class="ec-desc">${u.isTower ? '远程炮塔' : '近战阻挡单位'} ${u.rng ? '· 带远程攻击' : ''} ${u.isSplash ? '· 范围溅射' : ''} ${u.canTargetFlying ? '· 可对空' : ''}</div>
+        <div class="ec-stats">
+          伤害:${u.damage} | 范围:${u.range || u.rng || '-'} | 攻速:${u.cooldown || u.attackInterval}frames<br>
+          血量:${u.hp} | ${u.isTower ? '溅射:' + (u.splashRadius || '无') : '阻挡:' + u.blockCount + '敌'}
+        </div>
+        <div class="ec-cost">💰 ${u.cost} 金币</div>
+        ${branchHTML}
+      </div>`;
+    }).join('');
+  }
+
+  function renderEnemyTab() {
+    const enemies = Object.entries(ENEMY_PROTO).map(([k, v]) => ({ ...v, key: k }));
+    encyContent.innerHTML = enemies.map(e => `
+      <div class="ency-card">
+        <div class="ec-name">${e.flying ? '✈️' : e.healer ? '✚' : e.ranged ? '🔫' : '👤'} ${e.type === 'maus' ? '鼠式坦克' : e.type === 'boss_tank' ? '红坦克' : e.type === 'tank' ? '坦克' : e.type === 'armored' ? '装甲兵' : e.type === 'assault' ? '突击兵' : e.type === 'plane' ? '轰炸机' : e.type === 'medic' ? '医疗兵' : '步兵'}</div>
+        <div class="ec-desc">${e.flying ? '飞行单位·免疫近战阻挡' : e.healer ? '治疗周围友军' : e.ranged ? '远程攻击' : '近战攻击'} | 速度:${e.speed.toFixed(2)}</div>
+        <div class="ec-stats">
+          血量:${e.hp} | 伤害:${e.atkDmg} | 击杀奖励:${e.reward}💰
+          ${e.ranged ? ` | 远程:${e.rDmg}伤害 ${e.range}范围` : ''}
+          ${e.healer ? ` | 治疗:${e.healAmount}/跳 ${e.healRange}范围` : ''}
+        </div>
+        <div class="ec-cost">💰 击杀奖励: ${e.reward} 金币</div>
+      </div>`).join('');
+  }
+
+  function renderSkillsTab() {
+    encyContent.innerHTML = `
+      <div class="ency-card" style="grid-column:1/-1">
+        <div class="ec-name">🛩️ 空袭技能</div>
+        <div class="ec-desc">点击空袭按钮后选择目标地点，对范围内所有敌人造成伤害</div>
+        <div class="ec-stats">伤害:55 | 范围:120 | 冷却:15秒</div>
+      </div>
+      <div class="ency-card" style="grid-column:1/-1">
+        <div class="ec-name">⬆️ 单位升级</div>
+        <div class="ec-desc">Lv.1→2: 伤害+25% HP+10% 射程+5% | Lv.2→3: 二选一分支升级</div>
+        <div class="ec-stats">最多⭐⭐⭐ | 费用:部署费×1.3(分支×1.15) | 升级回复50%血量</div>
+      </div>
+      <div class="ency-card" style="grid-column:1/-1">
+        <div class="ec-name">⭐ 星级评价</div>
+        <div class="ec-desc">通关时根据剩余血量评定: ⭐⭐⭐(≥18血) ⭐⭐(6-17) ⭐(1-5) 满血=完美作战</div>
+      </div>
+    `;
+  }
+
+  function renderHotkeysTab() {
+    const keys = [
+      ['1', '选择轻步兵'], ['2', '选择掷弹兵/游骑兵'],
+      ['S', '出售模式'], ['U', '升级模式'],
+      ['Space', '暂停/继续'], ['Esc', '暂停/返回菜单'],
+      ['Shift+点击', '快速升级单位'], ['右键', '出售单位'],
+      ['点击炮位', '建造/升级塔'], ['点击路径', '部署阻挡兵'],
+    ];
+    encyContent.innerHTML = keys.map(([k, v]) => `
+      <div class="ency-hotkey-row"><span>${v}</span><span class="key">${k}</span></div>
+    `).join('');
+  }
+
+  encyTabs.querySelectorAll('.ency-tab').forEach(tab => {
+    tab.addEventListener('click', () => renderEncyTab(tab.dataset.tab));
+  });
+  encyBackBtn.addEventListener('click', showMainMenu);
+  mainTutorialBtn.addEventListener('click', () => showEncyclopedia('main'));
+  menuTutorialBtn2.addEventListener('click', () => showEncyclopedia('level'));
+
   // Canvas
   canvas.addEventListener('click', (e) => {
-    if (game.menuOpen || game.paused) return;
+    if (game.menuOpen) return;
+    if (game.paused && !game.gameOver && !game.gameWin && !game.levelComplete) { togglePause(); return; }
     if (game.gameOver) { callbacks.onRestart(); return; }
     if (game.gameWin) return;
     if (game.levelComplete) { callbacks.onAdvanceLevel(); return; }
@@ -659,6 +764,10 @@ export function setupUI(game, callbacks) {
       if (!saveOverlay.classList.contains('hidden')) { showMainMenu(); return; }
       if (!campaignOverlay.classList.contains('hidden')) { showMainMenu(); return; }
       if (!menuOverlay.classList.contains('hidden')) { showCampaignSelect(); return; }
+      // 游戏中：Esc 切换暂停
+      if (!game.menuOpen && !game.gameOver && !game.gameWin && !game.levelComplete) {
+        togglePause(); return;
+      }
       showMainMenu();
       return;
     }
@@ -703,7 +812,7 @@ export function setupUI(game, callbacks) {
       }
     } else if (e.key === ' ') {
       e.preventDefault();
-      if (!game.gameOver && !game.gameWin && !game.levelComplete) togglePause();
+      togglePause();
     }
   });
 

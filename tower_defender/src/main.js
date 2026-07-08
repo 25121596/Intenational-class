@@ -1,10 +1,10 @@
 import './style.css';
 import { createGameState, loadLevel, startWave,
-         placeTower, placeBlocker, sellUnit, update, startUpgrade, getUpgradeCost,
+         placeTower, placeBlocker, sellUnit, update, startUpgrade, getUpgradeCost, startBranchUpgrade,
          armAirstrike, triggerAirstrike } from './game.js';
 import { draw } from './draw.js';
 import { setupUI } from './ui.js';
-import { LEVELS, CAMPAIGNS, TOWER_DEFS } from './config.js';
+import { LEVELS, CAMPAIGNS, TOWER_DEFS, TOWER_BRANCHES } from './config.js';
 import { computePathLengths, generateTrees, generateRoadStones, findNearestFreeSlot, generateClouds, generateBirds } from './helpers.js';
 import { initAudio } from './audio.js';
 import { ensureMusicLoaded, switchTrack, playBossMusic, stopBossMusic, updateMusic, toggleMute, isMuted } from './music.js';
@@ -45,7 +45,9 @@ const ui = setupUI(game, {
     if (game.slotMenuOpen && game.slotMenuOptions.length > 0) {
       for (const opt of game.slotMenuOptions) {
         if (x >= opt.x && x <= opt.x + opt.w && y >= opt.y && y <= opt.y + opt.h) {
-          if (opt.isUpgrade) {
+          if (opt.isBranch) {
+            startBranchUpgrade(game, opt.unit, opt.branchKey);
+          } else if (opt.isUpgrade) {
             startUpgrade(game, opt.unit, true);
           } else {
             const prevType = game.selectedType;
@@ -86,17 +88,38 @@ const ui = setupUI(game, {
       }
     }
 
-    // 4. 点击已占用的塔位 → 显示升级菜单
+    // 4. 点击已占用的塔位 → 显示升级菜单（3级时显示分支选择）
     for (const s of game.slots) {
       if (s.occupied && s.tower && !s.tower.isDead && Math.hypot(s.x - x, s.y - y) < 22) {
         const tower = s.tower;
-        const cost = getUpgradeCost(tower.type, true);
-        if (tower.upgradeLevel < 3) {
-          const ox = s.x - 42, oy = s.y > 420 ? s.y - 72 : s.y + 28;
-          const opt = { x: ox, y: oy, w: 84, h: 62, isUpgrade: true, unit: tower, isTower: true, cost, level: tower.upgradeLevel };
+        if (tower.upgradeLevel >= 3) return; // 已满级
+        const cardW = 84, cardH = 72, gap = 8;
+        const oy = s.y > 420 ? s.y - 92 : s.y + 30;
+
+        if (tower.upgradeLevel === 2 && !tower.branch) {
+          // 分支选择 — 两张卡片
+          const branches = TOWER_BRANCHES[tower.type];
+          if (!branches) return;
+          const keys = ['a', 'b'];
+          const totalW = keys.length * cardW + gap;
+          const ox = Math.max(6, Math.min(894 - totalW, s.x - totalW / 2));
+          const options = keys.map((k, i) => {
+            const br = branches[k];
+            return { x: ox + i * (cardW + gap), y: oy, w: cardW, h: cardH,
+              isBranch: true, unit: tower, branchKey: k, branch: br,
+              cost: Math.floor(getUpgradeCost(tower.type, true) * 1.15) };
+          });
+          game.selectedSlot = s;
+          game.slotMenuOptions = options;
+          game.slotMenuBounds = { x: ox, y: oy, w: totalW, h: cardH };
+          game.slotMenuOpen = true;
+        } else {
+          const cost = getUpgradeCost(tower.type, true);
+          const ox = s.x - cardW / 2;
+          const opt = { x: ox, y: oy, w: cardW, h: 62, isUpgrade: true, unit: tower, isTower: true, cost, level: tower.upgradeLevel };
           game.selectedSlot = s;
           game.slotMenuOptions = [opt];
-          game.slotMenuBounds = { x: ox, y: oy, w: 84, h: 62 };
+          game.slotMenuBounds = { x: ox, y: oy, w: cardW, h: 62 };
           game.slotMenuOpen = true;
         }
         return;

@@ -237,6 +237,55 @@ body {
   font-size:0.85rem; cursor:pointer; transition:0.18s;
   letter-spacing:0.5px; margin-top:8px;
 }
+/* ====== 图鉴页面 ====== */
+.encyclopedia-overlay {
+  position:absolute; inset:0; z-index:21;
+  background: rgba(10,12,16,0.95); border-radius:6px;
+  display:flex; flex-direction:column; align-items:center;
+  padding:24px 28px; gap:12px;
+  border:1px solid #2a2e36; overflow-y:auto;
+}
+.encyclopedia-overlay.hidden { opacity:0; pointer-events:none; }
+.ency-title {
+  font-size:1.5rem; font-weight:900; color:#d0d4dc; letter-spacing:3px;
+}
+.ency-tabs { display:flex; gap:4px; margin-bottom:8px; }
+.ency-tab {
+  background: linear-gradient(180deg, #2a2f37, #20252b);
+  border:1px solid #363a42; color:#889098; padding:6px 14px;
+  border-radius:4px 4px 0 0; font-weight:700; font-size:0.75rem;
+  cursor:pointer; transition:0.15s;
+}
+.ency-tab:hover { color:#c0c4cc; border-color:#555a62; }
+.ency-tab.active {
+  background: linear-gradient(180deg, #5a4020, #3a2810);
+  color:#e0d0c0; border-color:#8a6030;
+}
+.ency-content {
+  width:100%; max-width:620px; display:grid;
+  grid-template-columns:1fr 1fr; gap:8px;
+}
+@media (max-width:640px) { .ency-content { grid-template-columns:1fr; } }
+.ency-card {
+  background: linear-gradient(180deg, #1e232a, #1a1e24);
+  border:1px solid #333840; border-radius:4px;
+  padding:10px 12px; color:#b0b8c0;
+}
+.ency-card .ec-name { font-weight:800; color:#d0d4dc; font-size:0.9rem; }
+.ency-card .ec-desc { font-size:0.7rem; color:#8a8070; margin:2px 0; }
+.ency-card .ec-stats { font-size:0.72rem; color:#6a7078; line-height:1.5; }
+.ency-card .ec-cost { font-size:0.7rem; color:#ffd700; margin-top:3px; }
+.ency-hotkey-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:8px 12px; background:rgba(0,0,0,0.2); border-radius:3px;
+  color:#c0c4cc; font-size:0.8rem;
+}
+.ency-hotkey-row .key {
+  background:#3a3e45; color:#ffd700; padding:3px 8px;
+  border-radius:3px; font-weight:800; font-size:0.75rem;
+  min-width:24px; text-align:center;
+}
+
 .campaign-back-btn:hover {
   background: linear-gradient(180deg, #383e47, #2e333b);
   border-color:#5a5e65; color:#d0d4dc;
@@ -337,6 +386,12 @@ canvas.airstrike-arming { cursor: crosshair; box-shadow: inset 0 0 0 3px #c8a84a
 .stats { display:flex; gap:12px; flex-wrap:wrap; }
 .stat-item { font-weight:700; font-size:0.8rem; display:flex; align-items:center; gap:3px; white-space:nowrap; }
 .stat-item.hp { color:#c05050; } .stat-item.gold { color:#b89840; }
+.stat-item.gold.bounce { animation: gold-bounce 0.5s ease-out; }
+@keyframes gold-bounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
 .stat-item.wave { color:#5a8a9a; } .stat-item.kills { color:#6a9070; }
 .stat-item.lv { color:#9a7040; }
 .stat-item.timer { color:#a08030; font-weight:800; animation:pulse-timer 1s ease-in-out infinite; }

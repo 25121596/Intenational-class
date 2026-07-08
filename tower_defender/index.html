@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>钢铁之心（Iron Hearts）· 0.5 Beta</title>
+  <title>钢铁之心（Iron Hearts）· 0.7.1 Beta</title>
 </head>
 <body>
   <div class="game-container">
@@ -11,11 +11,11 @@
     <div class="main-menu-overlay" id="mainMenuOverlay">
       <div class="main-menu-logo">🛡️</div>
       <div class="main-menu-title">钢铁之心</div>
-      <div class="main-menu-subtitle">I R O N  H E A R T S · 0.5 Beta</div>
+      <div class="main-menu-subtitle">I R O N  H E A R T S · 0.7.1 Beta</div>
       <div class="main-menu-buttons">
         <button class="main-menu-btn primary" id="mainStartBtn">⚔️ 开始游戏</button>
         <button class="main-menu-btn" id="mainSaveMgrBtn">💾 存档管理</button>
-        <button class="main-menu-btn" id="mainTutorialBtn">📖 操作说明</button>
+        <button class="main-menu-btn" id="mainTutorialBtn">📖 图鉴</button>
         <button class="main-menu-btn danger" id="mainQuitBtn">🚪 退出游戏</button>
       </div>
       <div class="difficulty-selector" id="difficultySelector">
@@ -24,7 +24,7 @@
         <button class="diff-btn" data-diff="sergeant">中士</button>
         <button class="diff-btn" data-diff="colonel">上校</button>
       </div>
-      <div class="main-menu-version">v0.5 Beta · DEBUG</div>
+      <div class="main-menu-version">v0.7.1 Beta · DEBUG</div>
     </div>
 
     <!-- ====== 存档管理页面 ====== -->
@@ -56,8 +56,21 @@
       <div class="menu-level-grid" id="menuLevelGrid"></div>
       <div class="menu-btn-row">
         <button class="menu-btn" id="menuBackToCampaignBtn">← 返回战场选择</button>
-        <button class="menu-btn" id="menuTutorialBtn2">📖 操作说明</button>
+        <button class="menu-btn" id="menuTutorialBtn2">📖 图鉴</button>
       </div>
+    </div>
+
+    <!-- ====== 图鉴页面 ====== -->
+    <div class="encyclopedia-overlay hidden" id="encyclopediaOverlay">
+      <div class="ency-title">📖 战场图鉴</div>
+      <div class="ency-tabs" id="encyTabs">
+        <button class="ency-tab active" data-tab="friendly">🛡️ 我方单位</button>
+        <button class="ency-tab" data-tab="enemy">💀 敌方单位</button>
+        <button class="ency-tab" data-tab="skills">⚡ 技能</button>
+        <button class="ency-tab" data-tab="hotkeys">⌨️ 快捷键</button>
+      </div>
+      <div class="ency-content" id="encyContent"></div>
+      <button class="campaign-back-btn" id="encyBackBtn">← 返回</button>
     </div>
 
     <!-- ====== 游戏界面 ====== -->

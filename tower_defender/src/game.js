@@ -1,6 +1,6 @@
 import {
   TOWER_DEFS, BLOCKER_DEFS, ENEMY_PROTO, PATH_NAMES, LEVELS, CAMPAIGNS,
-  ENDLESS_LEVEL, generateEndlessWave,
+  ENDLESS_LEVEL, generateEndlessWave, TOWER_BRANCHES,
 } from './config.js';
 import {
   computePathLengths, getPositionOnPath, findNearestPathPoint, findNearestFreeSlot,
@@ -71,6 +71,8 @@ export function createGameState() {
     goldTickTimer: 0,
     towersPlaced: 0, blockersPlaced: 0, unitsLost: 0, goldEarned: 0,
     shakeX: 0, shakeY: 0, shakeTimer: 0, shakeIntensity: 0, shakeMax: 0,
+    seenEnemyTypes: {},
+    enemyIntro: null, enemyIntroTimer: 0,
   };
 }
 
@@ -127,6 +129,7 @@ export function loadLevel(game, index) {
   game.paused = false;
   game.airstrikeArming = false; game.airstrikeCd = 0;
   game.shakeX = 0; game.shakeY = 0; game.shakeTimer = 0; game.shakeIntensity = 0; game.shakeMax = 0;
+  game.seenEnemyTypes = {}; game.enemyIntro = null; game.enemyIntroTimer = 0;
   game.selectedType = game.level.availableTowers.includes('infantry') ? 'infantry' : game.level.availableTowers[0];
 }
 
@@ -260,7 +263,7 @@ function finalizeTowerDeployment(game, dep) {
     isSplash: def.isSplash, splashRadius: def.splashRadius, splashDamagePct: def.splashDamagePct,
     canTargetFlying: def.canTargetFlying || false,
     cooldownMax: def.cooldown, hp: def.hp, maxHp: def.hp, flashTimer: 0, isDead: false,
-    upgradeLevel: 0, angle: 0, buildAnim: 18,
+    upgradeLevel: 0, angle: 0, buildAnim: 18, branch: null, doubleShot: false,
   };
   game.towers.push(tower);
   slot.occupied = true; slot.tower = tower;
@@ -275,6 +278,8 @@ function killEnemy(game, e) {
   if (e.isDead || e.dyingTimer > 0) return;
   e.dyingTimer = 24; // 0.4s 死亡动画
   e.isDead = true;    // 标记死亡但不立即 splice
+  // 释放阻挡槽位
+  if (e.blockingUnit) { e.blocked = false; e.blockingUnit = null; }
   game.gold += e.reward;
   game.goldEarned += e.reward;
   game.kills++;
@@ -360,10 +365,12 @@ export function sellUnit(game, mx, my) {
 // ---- 升级系统 ----
 export function startUpgrade(game, unit, isTower) {
   if (!unit || unit.isDead || unit.upgradeLevel >= MAX_UPGRADE) return false;
+  // 2→3级需要走分支选择
+  if (isTower && unit.upgradeLevel >= 2) return false;
   const cost = getUpgradeCost(unit.type, isTower);
   if (game.gold < cost) { game.announcement = '💰 金币不足！'; game.announcementTimer = 40; return false; }
   game.gold -= cost;
-  const deployTime = 36; // 0.6s at 60fps
+  const deployTime = 36;
   game.deployments.push({
     x: unit.x, y: unit.y, isUpgrade: true, isTower,
     type: unit.type, timer: deployTime, maxTimer: deployTime,
@@ -375,17 +382,51 @@ export function startUpgrade(game, unit, isTower) {
   return true;
 }
 
+// 分支升级（3级→4级，二选一）
+export function startBranchUpgrade(game, unit, branchKey) {
+  if (!unit || unit.isDead || unit.upgradeLevel !== 2 || unit.branch) return false;
+  const branches = TOWER_BRANCHES[unit.type];
+  if (!branches || !branches[branchKey]) return false;
+  const branch = branches[branchKey];
+  const cost = Math.floor(getUpgradeCost(unit.type, true) * 1.15);
+  if (game.gold < cost) { game.announcement = '💰 金币不足！'; game.announcementTimer = 40; return false; }
+  game.gold -= cost;
+  const deployTime = 40;
+  game.deployments.push({
+    x: unit.x, y: unit.y, isUpgrade: true, isBranch: true, isTower: true,
+    type: unit.type, timer: deployTime, maxTimer: deployTime,
+    targetUnit: unit, branchKey,
+  });
+  spawnParticles(game, unit.x, unit.y, 8, '#ffd700', [0.5, 2], [6, 14]);
+  game.announcement = `⬆️ ${branch.name} 升级中...`;
+  game.announcementTimer = 30;
+  return true;
+}
+
 function finalizeUpgrade(game, dep) {
   const unit = dep.targetUnit;
   if (!unit || unit.isDead) return;
-  const def = dep.isTower ? TOWER_DEFS[dep.type] : BLOCKER_DEFS[dep.type];
-  unit.upgradeLevel = (unit.upgradeLevel || 0) + 1;
-  applyUpgradeStats(unit, def, unit.upgradeLevel);
-  playUpgrade();
-  spawnParticles(game, unit.x, unit.y, 22, '#ffd700', [1.5, 5], [12, 28]);
-  const lvlStr = '⭐'.repeat(unit.upgradeLevel);
-  game.announcement = `⬆️ 升级完成！${lvlStr} Lv.${unit.upgradeLevel + 1}`;
-  game.announcementTimer = 50;
+
+  if (dep.isBranch && dep.branchKey) {
+    // 分支升级
+    const branches = TOWER_BRANCHES[dep.type];
+    if (!branches || !branches[dep.branchKey]) return;
+    branches[dep.branchKey].apply(unit);
+    unit.upgradeLevel = 3;
+    playUpgrade();
+    spawnParticles(game, unit.x, unit.y, 30, '#ffd700', [2, 6], [14, 32]);
+    game.announcement = `⬆️ ${branches[dep.branchKey].name} 完成！⭐⭐⭐`;
+    game.announcementTimer = 60;
+  } else {
+    const def = dep.isTower ? TOWER_DEFS[dep.type] : BLOCKER_DEFS[dep.type];
+    unit.upgradeLevel = (unit.upgradeLevel || 0) + 1;
+    applyUpgradeStats(unit, def, unit.upgradeLevel);
+    playUpgrade();
+    spawnParticles(game, unit.x, unit.y, 22, '#ffd700', [1.5, 5], [12, 28]);
+    const lvlStr = '⭐'.repeat(unit.upgradeLevel);
+    game.announcement = `⬆️ 升级完成！${lvlStr} Lv.${unit.upgradeLevel + 1}`;
+    game.announcementTimer = 50;
+  }
 }
 
 // ---- 空袭技能 ----
@@ -478,7 +519,8 @@ export function update(game) {
         const proto = ENEMY_PROTO['tank'];
         const buffed = { ...proto, hp: Math.floor(proto.hp * 1.4), speed: proto.speed * 1.25, reward: proto.reward + 10 };
         const e = spawnEnemy(game, buffed, pi);
-        e.speed = buffed.speed; // 仅覆盖速度，HP由spawnEnemy统一处理（含难度加成）
+        if (!game.seenEnemyTypes['tank']) { game.seenEnemyTypes['tank'] = true; game.enemyIntro = { type: 'tank', name: '坦克' }; game.enemyIntroTimer = 240; }
+        e.speed = buffed.speed;
       }
       game.announcement = '🐭 鼠式召唤增援！+2强化坦克';
       game.announcementTimer = 90;
@@ -496,6 +538,12 @@ export function update(game) {
       const cfg = game.endless ? generateEndlessWave(game.wave) : game.level.waves[game.wave - 1];
       const pathIdx = cfg.availablePaths[Math.floor(Math.random() * cfg.availablePaths.length)];
       spawnEnemy(game, def, pathIdx);
+      if (!game.seenEnemyTypes[def.type]) {
+        game.seenEnemyTypes[def.type] = true;
+        const introNames = { rifleman:'步兵', assault:'突击兵', armored:'装甲兵', tank:'坦克', boss_tank:'红坦克', maus:'鼠式坦克', plane:'轰炸机', medic:'医疗兵' };
+        game.enemyIntro = { type: def.type, name: introNames[def.type] || def.type };
+        game.enemyIntroTimer = 240;
+      }
       if (def.type === 'maus') { game.announcement = '🐭 鼠式坦克 正在逼近！'; game.announcementTimer = 150; triggerShake(game, 8, 30); }
       game.spawnCount++;
       game.spawnTimer = Math.floor(Math.max(8, game.spawnInterval - Math.floor(game.spawnCount / 5)));
@@ -617,6 +665,9 @@ export function update(game) {
   // 空袭冷却
   if (game.airstrikeCd > 0) game.airstrikeCd--;
 
+  // 新敌人登场计时
+  if (game.enemyIntroTimer > 0) { game.enemyIntroTimer--; if (game.enemyIntroTimer <= 0) game.enemyIntro = null; }
+
   // 地形装饰更新
   if (!game.menuOpen) { updateClouds(game.clouds, 900); updateBirds(game.birds, 900, 600); }
 
@@ -711,6 +762,19 @@ export function update(game) {
         isSplash: tower.isSplash, splashRadius: tower.splashRadius, splashDamagePct: tower.splashDamagePct,
       });
       tower.cooldown = tower.cooldownMax;
+      // 双发齐射（AA弹幕分支）
+      if (tower.doubleShot) {
+        const spreadX = (Math.random() - 0.5) * 20;
+        const spreadY = (Math.random() - 0.5) * 20;
+        game.projectiles.push({
+          x: tower.x, y: tower.y, px: tower.x, py: tower.y,
+          targetEnemy: tower.isSplash ? null : bestTarget.enemy,
+          targetX: bestTarget.pos.x + spreadX, targetY: bestTarget.pos.y + spreadY,
+          speed: tower.bulletSpeed, damage: Math.floor(tower.damage * 0.7), color: tower.bulletColor,
+          size: tower.isSplash ? 7 : 4,
+          isSplash: tower.isSplash, splashRadius: tower.splashRadius, splashDamagePct: tower.splashDamagePct,
+        });
+      }
       playShoot();
     }
   }

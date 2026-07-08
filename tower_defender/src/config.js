@@ -120,6 +120,34 @@ export const PATH_NAMES = ['A', 'B', 'C'];
 export const PATH_ENTRY_COLORS = ['#4a9edb', '#db6b4a', '#5aad6b'];
 
 // 难度设定
+// 塔4级分支（LV.3→LV.4 二选一）
+export const TOWER_BRANCHES = {
+  machine: {
+    a: { name: '速射机枪', desc: '射速+35% · 射程+15%', icon: '⚡',
+         apply(t) { t.cooldownMax = Math.floor(t.cooldownMax * 0.65); t.range = Math.floor(t.range * 1.15); t.branch = 'a'; } },
+    b: { name: '重机枪',  desc: '伤害+50% · 生命+25%', icon: '💪',
+         apply(t) { t.damage = Math.floor(t.damage * 1.5); t.maxHp = Math.floor(t.maxHp * 1.25); t.hp = Math.min(t.maxHp, t.hp + Math.floor(t.maxHp * 0.3)); t.branch = 'b'; } },
+  },
+  cannon: {
+    a: { name: '重型穿甲弹', desc: '伤害+60% · 射程+20%', icon: '🎯',
+         apply(t) { t.damage = Math.floor(t.damage * 1.6); t.range = Math.floor(t.range * 1.2); t.branch = 'a'; } },
+    b: { name: '高爆弹',   desc: '范围溅射 · 半径55', icon: '💥',
+         apply(t) { t.isSplash = true; t.splashRadius = 55; t.splashDamagePct = 0.5; t.bulletSize = t.size + 2; t.branch = 'b'; } },
+  },
+  howitzer: {
+    a: { name: '燃烧弹', desc: '溅射半径+40% · 伤害+25%', icon: '🔥',
+         apply(t) { t.splashRadius = Math.floor(t.splashRadius * 1.4); t.damage = Math.floor(t.damage * 1.25); t.branch = 'a'; } },
+    b: { name: '集束弹', desc: '伤害+55% · 射速+25%', icon: '💣',
+         apply(t) { t.damage = Math.floor(t.damage * 1.55); t.cooldownMax = Math.floor(t.cooldownMax * 0.75); t.branch = 'b'; } },
+  },
+  aa: {
+    a: { name: '高射速', desc: '射速+45% · 射程+15%', icon: '⚡',
+         apply(t) { t.cooldownMax = Math.floor(t.cooldownMax * 0.55); t.range = Math.floor(t.range * 1.15); t.branch = 'a'; } },
+    b: { name: '弹幕',   desc: '伤害+50% · 双发齐射', icon: '🎆',
+         apply(t) { t.damage = Math.floor(t.damage * 1.5); t.doubleShot = true; t.branch = 'b'; } },
+  },
+};
+
 export const DIFFICULTIES = {
   private: { name: '列兵', hpMult: 1.0, desc: '标准难度' },
   sergeant: { name: '中士', hpMult: 1.15, desc: '敌人血量+15%' },

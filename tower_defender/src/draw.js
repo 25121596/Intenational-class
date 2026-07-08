@@ -135,7 +135,20 @@ function drawSlotMenu(game, ctx) {
       ctx.fill(); ctx.stroke();
     }
 
-    if (opt.isUpgrade) {
+    if (opt.isBranch) {
+      // 分支选择卡片
+      const br = opt.branch;
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(br.icon, opt.x + opt.w / 2, opt.y + 22);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(br.name, opt.x + opt.w / 2, opt.y + 38);
+      ctx.fillStyle = '#a0a8b0'; ctx.font = '8px sans-serif';
+      ctx.fillText(br.desc, opt.x + opt.w / 2, opt.y + 51);
+      const canAfford = game.gold >= opt.cost;
+      ctx.fillStyle = canAfford ? '#ffd700' : '#f87171';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(`${opt.cost}💰`, opt.x + opt.w / 2, opt.y + 67);
+    } else if (opt.isUpgrade) {
       // 升级选项 — 简洁版
       ctx.fillStyle = '#ffd700'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('⬆️', opt.x + opt.w / 2, opt.y + 22);
@@ -167,6 +180,96 @@ function drawSlotMenu(game, ctx) {
       ctx.fillText(`${def.cost}💰`, opt.x + opt.w / 2, opt.y + 55);
     }
   });
+  ctx.textAlign = 'start';
+}
+
+// ---- 悬停提示 ----
+function drawHoverTooltip(game, ctx, canvasW, canvasH) {
+  const mx = game.mouseX, my = game.mouseY;
+  let target = null; // { name, hp, maxHp, damage, range, info, cost }
+
+  // 检测塔
+  for (const t of game.towers) {
+    if (t.isDead) continue;
+    if (Math.hypot(t.x - mx, t.y - my) < t.size + 6) {
+      const def = TOWER_DEFS[t.type];
+      target = {
+        name: getUnitDisplayName(t.type, game.activeCampaign),
+        hp: t.hp, maxHp: t.maxHp,
+        damage: t.damage,
+        range: t.range,
+        info: `${t.isSplash ? '溅射' + t.splashRadius : '单体'} | Lv.${t.upgradeLevel + 1}`,
+        cost: null,
+        color: t.color,
+      };
+      break;
+    }
+  }
+  // 检测阻挡单位
+  if (!target) {
+    for (const b of game.blockers) {
+      if (b.isDead) continue;
+      if (Math.hypot(b.x - mx, b.y - my) < b.size + 6) {
+        const def = BLOCKER_DEFS[b.type];
+        target = {
+          name: getUnitDisplayName(b.type, game.activeCampaign),
+          hp: b.hp, maxHp: b.maxHp,
+          damage: b.damage,
+          range: b.rCooldown !== undefined ? BLOCKER_DEFS['defender'].rng : 0,
+          info: `挡${b.blockCount}敌 | ${b.rCooldown !== undefined ? '远程掷弹' : '纯近战'} | Lv.${b.upgradeLevel + 1}`,
+          cost: null,
+          color: b.color,
+        };
+        break;
+      }
+    }
+  }
+  // 检测敌人
+  if (!target) {
+    for (const e of game.enemies) {
+      if (e.isDead && e.dyingTimer <= 0) continue;
+      const pos = getPositionOnPath(e.progress, e.pathIndex, game);
+      const cy = e.flying ? pos.y - 28 : pos.y;
+      if (Math.hypot(pos.x - mx, cy - my) < e.size + 8) {
+        const names = { rifleman:'步兵', assault:'突击兵', armored:'装甲兵', tank:'坦克', boss_tank:'红坦克', maus:'鼠式坦克', plane:'轰炸机', medic:'医疗兵' };
+        target = {
+          name: names[e.enemyType] || e.enemyType,
+          hp: e.hp, maxHp: e.maxHp,
+          damage: e.atkDmg || e.rDmg || 0,
+          range: e.ranged ? e.rRange : 0,
+          info: `${e.flying ? '✈飞行 ' : ''}${e.healer ? '✚治疗 ' : ''}${e.ranged ? '远程' : '近战'} | 奖励${e.reward}💰`,
+          cost: null,
+          color: '#c04040',
+        };
+        break;
+      }
+    }
+  }
+
+  if (!target) return;
+  // 绘制tooltip
+  const tipW = 160, tipH = 75;
+  let tipX = mx + 16, tipY = my - tipH - 10;
+  if (tipX + tipW > canvasW) tipX = mx - tipW - 16;
+  if (tipY < 4) tipY = my + 16;
+
+  ctx.fillStyle = 'rgba(10,12,18,0.92)'; ctx.strokeStyle = target.color; ctx.lineWidth = 2;
+  roundRect(ctx, tipX, tipY, tipW, tipH, 5); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Segoe UI", sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(target.name, tipX + 8, tipY + 18);
+  ctx.fillStyle = '#8a8070'; ctx.font = '10px "Segoe UI", sans-serif';
+  ctx.fillText(target.info, tipX + 8, tipY + 34);
+
+  // 血条
+  const barW = tipW - 20, barH = 6, barX = tipX + 10, barY = tipY + 44;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(barX, barY, barW, barH);
+  const pct = Math.max(0, target.hp / target.maxHp);
+  ctx.fillStyle = pct > 0.5 ? '#4ade80' : pct > 0.25 ? '#facc15' : '#f87171';
+  ctx.fillRect(barX, barY, barW * pct, barH);
+
+  ctx.fillStyle = '#c0c4cc'; ctx.font = '10px "Segoe UI", sans-serif';
+  ctx.fillText(`HP:${Math.floor(target.hp)}/${target.maxHp}  伤害:${target.damage}` + (target.range ? `  范围:${target.range}` : ''), tipX + 8, tipY + 66);
   ctx.textAlign = 'start';
 }
 
@@ -599,7 +702,7 @@ export function draw(game, ctx, canvasW, canvasH) {
       ctx.fillStyle = '#ffd700'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('⭐'.repeat(tower.upgradeLevel), tower.x, ty - 6);
     }
-    if (game.upgradeMode && tower.upgradeLevel < 3) {
+    if (game.upgradeMode && tower.upgradeLevel < 2) {
       ctx.strokeStyle = 'rgba(255,215,0,0.7)'; ctx.lineWidth = 2.5; ctx.setLineDash([4, 3]);
       ctx.beginPath(); ctx.arc(tower.x, tower.y, tower.size + 9, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
@@ -766,8 +869,31 @@ export function draw(game, ctx, canvasW, canvasH) {
     drawSlotMenu(game, ctx);
   }
 
-  // 公告
-  if (game.announcement && game.announcementTimer > 0) {
+  // ---- 悬停Tooltip ----
+  if (!game.slotMenuOpen && !game.sellMode && !game.upgradeMode && !game.menuOpen) {
+    drawHoverTooltip(game, ctx, canvasW, canvasH);
+  }
+
+  // ---- 新敌人登场提示 ----
+  if (game.enemyIntro && game.enemyIntroTimer > 0) {
+    const alpha = Math.min(1, game.enemyIntroTimer / 40);
+    const ix = canvasW - 175, iy = 55;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(10,12,18,0.9)'; ctx.strokeStyle = '#c04040'; ctx.lineWidth = 2;
+    roundRect(ctx, ix, iy, 160, 48, 5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('⚠', ix + 18, iy + 34);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px "Segoe UI", sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('新敌人登场!', ix + 38, iy + 20);
+    ctx.fillStyle = '#e0c0c0'; ctx.font = 'bold 11px "Segoe UI", sans-serif';
+    ctx.fillText(game.enemyIntro.name, ix + 38, iy + 38);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'start';
+  }
+
+  // 公告（统计面板显示时隐藏避免重叠）
+  const panelShowing = game.levelComplete && !game.gameWin && game.announcementTimer > 60;
+  if (game.announcement && game.announcementTimer > 0 && !panelShowing) {
     const alpha = Math.min(1, game.announcementTimer / 30);
     const lines = game.announcement.split('\n');
     const fontSize = game.gameWin ? 30 : 22;
