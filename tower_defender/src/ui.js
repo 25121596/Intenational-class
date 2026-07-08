@@ -1,4 +1,4 @@
-import { TOWER_DEFS, BLOCKER_DEFS, LEVELS, CAMPAIGNS, getUnitDisplayName } from './config.js';
+import { TOWER_DEFS, BLOCKER_DEFS, LEVELS, CAMPAIGNS, getUnitDisplayName, generateEndlessWave } from './config.js';
 
 // ---- 存档系统 ----
 const SAVE_KEY = 'iron_hearts_saves_v2';
@@ -153,14 +153,14 @@ export function setupUI(game, callbacks) {
       }
     }
     else if (game.waveAutoTimer > 0) { nextWaveBtn.disabled = false; nextWaveBtn.textContent = `⚡ 下一波 (${Math.ceil(game.waveAutoTimer / 60)}s)`; nextWaveBtn.classList.add('auto-countdown'); }
-    else { nextWaveBtn.disabled = false; nextWaveBtn.textContent = `⚡ 下一波 (${game.wave}/${game.level.waves.length})`; nextWaveBtn.classList.remove('auto-countdown'); }
+    else { const totalW = game.endless ? '∞' : game.level.waves.length; nextWaveBtn.disabled = false; nextWaveBtn.textContent = `⚡ 下一波 (${game.wave}/${totalW})`; nextWaveBtn.classList.remove('auto-countdown'); }
   }
 
   function updateTimerDisplay() {
     if (game.waveAutoTimer > 0 && !game.isWaveActive && !game.gameOver && !game.gameWin && !game.levelComplete) {
       timerStat.style.display = 'flex'; timerDisplay.textContent = Math.ceil(game.waveAutoTimer / 60);
     } else { timerStat.style.display = 'none'; }
-    waveMaxSpan.textContent = game.level.waves.length;
+    waveMaxSpan.textContent = game.endless ? '∞' : game.level.waves.length;
     updateWavePreview();
   }
 
@@ -169,14 +169,19 @@ export function setupUI(game, callbacks) {
       if (wavePreview) wavePreview.style.display = 'none';
       return;
     }
-    const nextWaveIdx = game.isWaveActive ? game.wave : game.wave;
     const actualNext = game.isWaveActive ? game.wave + 1 : game.wave;
-    if (actualNext > game.level.waves.length) { wavePreview.style.display = 'none'; return; }
-    const cfg = game.level.waves[actualNext - 1];
-    if (!cfg) { wavePreview.style.display = 'none'; return; }
     const enemyNames = { rifleman: '步兵', assault: '突击兵', armored: '装甲兵', tank: '坦克', boss_tank: '红坦克', maus: '鼠式', plane: '飞机', medic: '医疗兵' };
+    let cfg;
+    if (game.endless) {
+      cfg = generateEndlessWave(actualNext);
+    } else {
+      if (actualNext > game.level.waves.length) { wavePreview.style.display = 'none'; return; }
+      cfg = game.level.waves[actualNext - 1];
+    }
+    if (!cfg) { wavePreview.style.display = 'none'; return; }
     const parts = cfg.enemies.map(e => `${enemyNames[e.t] || e.t}×${e.c}`).join(' · ');
-    const label = game.isWaveActive ? `👁 下一波(${actualNext}/${game.level.waves.length}): ` : `👁 第${actualNext}波: `;
+    const totalWaves = game.endless ? '∞' : game.level.waves.length;
+    const label = game.isWaveActive ? `👁 下一波(${actualNext}/${totalWaves}): ` : `👁 第${actualNext}波: `;
     wavePreview.textContent = label + parts;
     wavePreview.style.display = 'inline-block';
   }
@@ -628,7 +633,7 @@ export function setupUI(game, callbacks) {
     if (game.menuOpen) return;
     if (game.paused) { togglePause(); }
     if (confirm('确定要重新开始本关吗？当前进度将丢失。')) {
-      callbacks.onRestart(game.levelIndex);
+      callbacks.onRestart(game.endless ? 'endless' : game.levelIndex);
       updateUI(); buildWaveBadges(); updateTowerButtonLocks();
       updateButtonState(); updateTimerDisplay();
     }

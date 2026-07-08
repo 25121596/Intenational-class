@@ -364,7 +364,7 @@ function finalizeUpgrade(game, dep) {
 // ---- 提前出怪 ----
 export function forceSpawnEnemy(game) {
   if (!game.isWaveActive || game.spawnQueue.length === 0) return;
-  const cfg = game.level.waves[game.wave - 1];
+  const cfg = game.endless ? generateEndlessWave(game.wave) : game.level.waves[game.wave - 1];
   // spawn 2-3 enemies at once for noticeable effect
   const count = Math.min(3, Math.max(2, game.spawnQueue.length));
   let spawned = 0;
@@ -473,7 +473,7 @@ export function update(game) {
     game.bossEnemy.skillCooldown--;
     if (game.bossEnemy.skillCooldown <= 0) {
       game.bossEnemy.skillCooldown = game.bossEnemy.skillInterval;
-      const cfg = game.level.waves[game.wave - 1];
+      const cfg = game.endless ? generateEndlessWave(game.wave) : game.level.waves[game.wave - 1];
       for (let k = 0; k < 2; k++) {
         const pi = cfg.availablePaths[Math.floor(Math.random() * cfg.availablePaths.length)];
         const proto = ENEMY_PROTO['tank'];
@@ -493,7 +493,7 @@ export function update(game) {
     game.spawnTimer--;
     if (game.spawnTimer <= 0) {
       const def = game.spawnQueue.shift();
-      const cfg = game.level.waves[game.wave - 1];
+      const cfg = game.endless ? generateEndlessWave(game.wave) : game.level.waves[game.wave - 1];
       const pathIdx = cfg.availablePaths[Math.floor(Math.random() * cfg.availablePaths.length)];
       spawnEnemy(game, def, pathIdx);
       if (def.type === 'maus') { game.announcement = '🐭 鼠式坦克 正在逼近！'; game.announcementTimer = 150; }
