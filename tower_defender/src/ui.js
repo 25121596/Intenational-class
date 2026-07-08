@@ -55,7 +55,6 @@ export function setupUI(game, callbacks) {
   const waveBadgesContainer = document.getElementById('waveBadges');
   const nextWaveBtn = document.getElementById('nextWaveBtn');
   const sellModeBtn = document.getElementById('sellModeBtn');
-  const upgradeModeBtn = document.getElementById('upgradeModeBtn');
   const pauseBtn = document.getElementById('pauseBtn');
   const restartBtn = document.getElementById('restartBtn');
   const timerStat = document.getElementById('timerStat');
@@ -94,11 +93,8 @@ export function setupUI(game, callbacks) {
   const menuTutorialBtn2 = document.getElementById('menuTutorialBtn2');
   const menuReturnBtn = document.getElementById('menuReturnBtn');
 
-  // Tower buttons
-  const towerButtons = {
-    machine: document.getElementById('btnMachine'),
-    cannon: document.getElementById('btnCannon'),
-    howitzer: document.getElementById('btnHowitzer'),
+  // Blocker buttons (塔按钮已移除，改为点击炮位弹出菜单)
+  const blockerButtons = {
     infantry: document.getElementById('btnInfantry'),
     defender: document.getElementById('btnDefender'),
   };
@@ -128,26 +124,15 @@ export function setupUI(game, callbacks) {
     updateTowerButtonLabels();
   }
 
-  /** 根据当前战役更新塔/阻挡按钮的文字 */
+  /** 根据当前战役更新阻挡按钮的文字 */
   function updateTowerButtonLabels() {
     const cid = game.activeCampaign;
-    if (towerButtons.machine) {
-      const mName = getUnitDisplayName('machine', cid);
-      towerButtons.machine.textContent = `🔫 ${mName} 50💰`;
+    if (blockerButtons.infantry) {
+      blockerButtons.infantry.textContent = '🛡️ 轻步兵 60💰';
     }
-    if (towerButtons.cannon) {
-      const cName = getUnitDisplayName('cannon', cid);
-      towerButtons.cannon.textContent = `💣 ${cName} 80💰`;
-    }
-    if (towerButtons.howitzer) {
-      towerButtons.howitzer.textContent = '💥 SIG33 100💰';
-    }
-    if (towerButtons.infantry) {
-      towerButtons.infantry.textContent = '🛡️ 轻步兵 60💰';
-    }
-    if (towerButtons.defender) {
+    if (blockerButtons.defender) {
       const dName = getUnitDisplayName('defender', cid);
-      towerButtons.defender.textContent = `🪖 ${dName} 120💰`;
+      blockerButtons.defender.textContent = `🪖 ${dName} 120💰`;
     }
   }
 
@@ -197,12 +182,12 @@ export function setupUI(game, callbacks) {
 
   function selectUnit(type) {
     game.selectedType = type; game.sellMode = false; game.upgradeMode = false;
+    game.slotMenuOpen = false; game.slotMenuOptions = [];
     sellModeBtn.classList.remove('sell-active');
-    upgradeModeBtn.classList.remove('upgrade-active');
     canvas.classList.remove('sell-mode', 'blocker-mode');
-    for (const b of Object.values(towerButtons)) b.classList.remove('active-tower', 'active-blocker');
-    const btn = towerButtons[type];
-    if (btn) { if (TOWER_DEFS[type]) btn.classList.add('active-tower'); else btn.classList.add('active-blocker'); }
+    for (const b of Object.values(blockerButtons)) b.classList.remove('active-blocker');
+    const btn = blockerButtons[type];
+    if (btn) btn.classList.add('active-blocker');
     if (BLOCKER_DEFS[type]) canvas.classList.add('blocker-mode');
   }
 
@@ -226,7 +211,7 @@ export function setupUI(game, callbacks) {
   }
 
   function updateTowerButtonLocks() {
-    for (const [type, btn] of Object.entries(towerButtons)) btn.disabled = !game.level.availableTowers.includes(type);
+    for (const [type, btn] of Object.entries(blockerButtons)) btn.disabled = !game.level.availableTowers.includes(type);
   }
 
   function togglePause() {
@@ -583,8 +568,8 @@ export function setupUI(game, callbacks) {
     callbacks.onCanvasRightClick(x, y);
   });
 
-  // Tower/blocker buttons
-  for (const [type, btn] of Object.entries(towerButtons)) {
+  // Blocker buttons
+  for (const [type, btn] of Object.entries(blockerButtons)) {
     btn.addEventListener('click', () => {
       if (btn.disabled || game.menuOpen || game.paused) return;
       selectUnit(type);
@@ -595,31 +580,15 @@ export function setupUI(game, callbacks) {
   sellModeBtn.addEventListener('click', () => {
     if (game.menuOpen || game.paused) return;
     game.sellMode = !game.sellMode;
-    game.upgradeMode = false;
-    upgradeModeBtn.classList.remove('upgrade-active');
+    game.slotMenuOpen = false; game.slotMenuOptions = [];
     if (game.sellMode) {
       sellModeBtn.classList.add('sell-active');
       canvas.classList.add('sell-mode');
       canvas.classList.remove('blocker-mode');
-      for (const b of Object.values(towerButtons)) b.classList.remove('active-tower', 'active-blocker');
+      for (const b of Object.values(blockerButtons)) b.classList.remove('active-blocker');
     } else {
       sellModeBtn.classList.remove('sell-active');
       canvas.classList.remove('sell-mode');
-      selectUnit(game.selectedType);
-    }
-  });
-
-  upgradeModeBtn.addEventListener('click', () => {
-    if (game.menuOpen || game.paused) return;
-    game.upgradeMode = !game.upgradeMode;
-    game.sellMode = false;
-    sellModeBtn.classList.remove('sell-active');
-    canvas.classList.remove('sell-mode');
-    if (game.upgradeMode) {
-      upgradeModeBtn.classList.add('upgrade-active');
-      for (const b of Object.values(towerButtons)) b.classList.remove('active-tower', 'active-blocker');
-    } else {
-      upgradeModeBtn.classList.remove('upgrade-active');
       selectUnit(game.selectedType);
     }
   });
@@ -675,33 +644,22 @@ export function setupUI(game, callbacks) {
       return;
     }
     if (game.gameOver || game.gameWin || game.levelComplete || game.paused) return;
-    const keyMap = { '1': 'machine', '2': 'cannon', '3': 'howitzer', '4': 'infantry', '5': 'defender' };
+    const keyMap = { '1': 'infantry', '2': 'defender' };
     if (keyMap[e.key] && game.level.availableTowers.includes(keyMap[e.key])) {
       selectUnit(keyMap[e.key]);
       return;
     }
     if (e.key.toLowerCase() === 's') {
       game.sellMode = !game.sellMode;
-      game.upgradeMode = false; upgradeModeBtn.classList.remove('upgrade-active');
+      game.slotMenuOpen = false; game.slotMenuOptions = [];
       if (game.sellMode) {
         sellModeBtn.classList.add('sell-active');
         canvas.classList.add('sell-mode');
         canvas.classList.remove('blocker-mode');
-        for (const b of Object.values(towerButtons)) b.classList.remove('active-tower', 'active-blocker');
+        for (const b of Object.values(blockerButtons)) b.classList.remove('active-blocker');
       } else {
         sellModeBtn.classList.remove('sell-active');
         canvas.classList.remove('sell-mode');
-        selectUnit(game.selectedType);
-      }
-    } else if (e.key.toLowerCase() === 'u') {
-      game.upgradeMode = !game.upgradeMode;
-      game.sellMode = false; sellModeBtn.classList.remove('sell-active');
-      canvas.classList.remove('sell-mode');
-      if (game.upgradeMode) {
-        upgradeModeBtn.classList.add('upgrade-active');
-        for (const b of Object.values(towerButtons)) b.classList.remove('active-tower', 'active-blocker');
-      } else {
-        upgradeModeBtn.classList.remove('upgrade-active');
         selectUnit(game.selectedType);
       }
     } else if (e.key === ' ') {

@@ -113,6 +113,68 @@ function drawRiver(game, ctx, canvasW, canvasH) {
   }
 }
 
+// ---- 塔位弹出菜单 (王国保卫战风格) ----
+function drawSlotMenu(game, ctx) {
+  const b = game.slotMenuBounds;
+  if (!b) return;
+
+  // 背景
+  ctx.fillStyle = 'rgba(16,18,24,0.93)';
+  ctx.strokeStyle = '#6a5030'; ctx.lineWidth = 2;
+  roundRect(ctx, b.x - 4, b.y - 4, b.w + 8, b.h + 8, 6);
+  ctx.fill(); ctx.stroke();
+
+  game.slotMenuOptions.forEach(opt => {
+    const hover = game.mouseX >= opt.x && game.mouseX <= opt.x + opt.w &&
+                  game.mouseY >= opt.y && game.mouseY <= opt.y + opt.h;
+    if (hover) {
+      ctx.fillStyle = 'rgba(180,140,60,0.3)';
+      ctx.strokeStyle = '#b09050';
+      ctx.lineWidth = 2;
+      roundRect(ctx, opt.x - 2, opt.y - 2, opt.w + 4, opt.h + 4, 4);
+      ctx.fill(); ctx.stroke();
+    }
+
+    if (opt.isUpgrade) {
+      // 升级选项
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('⬆️', opt.x + opt.w / 2, opt.y + 20);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(`升级 Lv.${opt.level+1}→${opt.level+2}`, opt.x + opt.w / 2, opt.y + 38);
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(`${opt.cost}💰`, opt.x + opt.w / 2, opt.y + 55);
+    } else {
+      // 塔选项
+      const def = opt.def;
+      ctx.fillStyle = def.color; ctx.beginPath();
+      ctx.arc(opt.x + opt.w / 2, opt.y + 18, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(opt.x + opt.w / 2, opt.y + 18, 10, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
+      const label = opt.type === 'machine' ? 'MG' : opt.type === 'cannon' ? 'AT' : 'SIG';
+      ctx.fillText(label, opt.x + opt.w / 2, opt.y + 22);
+      ctx.fillStyle = '#c0c4cc'; ctx.font = 'bold 10px sans-serif';
+      const name = getUnitDisplayName(opt.type, game.activeCampaign);
+      ctx.fillText(name.length > 6 ? name.substring(0, 5)+'..' : name, opt.x + opt.w / 2, opt.y + 40);
+      const canAfford = game.gold >= def.cost;
+      ctx.fillStyle = canAfford ? '#ffd700' : '#f87171';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(`${def.cost}💰`, opt.x + opt.w / 2, opt.y + 55);
+    }
+  });
+  ctx.textAlign = 'start';
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
 // ---- 通关统计面板 ----
 function drawStatsPanel(game, ctx, canvasW, canvasH) {
   const cx = canvasW / 2, cy = canvasH / 2;
@@ -578,6 +640,11 @@ export function draw(game, ctx, canvasW, canvasH) {
     ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
     ctx.fillText(`🐭 鼠式坦克  Maus  ${Math.floor(hpp*100)}%`, canvasW / 2, by + 22);
     ctx.shadowBlur = 0; ctx.textAlign = 'start';
+  }
+
+  // ---- 塔位弹出菜单 (王国保卫战风格) ----
+  if (game.slotMenuOpen && game.slotMenuOptions.length > 0) {
+    drawSlotMenu(game, ctx);
   }
 
   // 公告

@@ -1,9 +1,9 @@
 import './style.css';
 import { createGameState, loadLevel, startWave,
-         placeTower, placeBlocker, sellUnit, forceSpawnEnemy, update, startUpgrade } from './game.js';
+         placeTower, placeBlocker, sellUnit, forceSpawnEnemy, update, startUpgrade, getUpgradeCost } from './game.js';
 import { draw } from './draw.js';
 import { setupUI } from './ui.js';
-import { LEVELS, CAMPAIGNS } from './config.js';
+import { LEVELS, CAMPAIGNS, TOWER_DEFS } from './config.js';
 import { computePathLengths, generateTrees, generateRoadStones } from './helpers.js';
 import { initAudio } from './audio.js';
 
@@ -28,6 +28,29 @@ const ui = setupUI(game, {
   onCanvasClick(x, y) {
     // 初始化音效（首次交互）
     initAudio();
+
+    // 1. 塔位弹出菜单：点击菜单选项
+    if (game.slotMenuOpen && game.slotMenuOptions.length > 0) {
+      for (const opt of game.slotMenuOptions) {
+        if (x >= opt.x && x <= opt.x + opt.w && y >= opt.y && y <= opt.y + opt.h) {
+          if (opt.isUpgrade) {
+            startUpgrade(game, opt.unit, true);
+          } else {
+            placeTower(game, opt.slot.x, opt.slot.y);
+          }
+          game.slotMenuOpen = false;
+          game.slotMenuOptions = [];
+          ui.updateUI();
+          return;
+        }
+      }
+      // 点击菜单外部 → 关闭
+      game.slotMenuOpen = false;
+      game.slotMenuOptions = [];
+      return;
+    }
+
+    // 2. 出售模式
     if (game.sellMode) {
       if (sellUnit(game, x, y)) {
         game.sellMode = false;
@@ -37,29 +60,59 @@ const ui = setupUI(game, {
       }
       return;
     }
-    if (game.upgradeMode || game._shiftHeld) {
-      // 升级模式 或 Shift+点击 → 升级单位
-      let found = null; let isTower = true;
-      for (const t of game.towers) {
-        if (!t.isDead && Math.hypot(t.x - x, t.y - y) < t.size + 10) { found = t; isTower = true; break; }
-      }
-      if (!found) {
-        for (const b of game.blockers) {
-          if (!b.isDead && Math.hypot(b.x - x, b.y - y) < b.size + 10) { found = b; isTower = false; break; }
+
+    // 3. Shift+点击 → 升级近战单位
+    if (game._shiftHeld) {
+      for (const b of game.blockers) {
+        if (!b.isDead && Math.hypot(b.x - x, b.y - y) < b.size + 10) {
+          if (startUpgrade(game, b, false)) { ui.updateUI(); }
+          return;
         }
       }
-      if (found && startUpgrade(game, found, isTower)) {
-        ui.updateUI();
+    }
+
+    // 4. 点击已占用的塔位 → 显示升级菜单
+    for (const s of game.slots) {
+      if (s.occupied && s.tower && !s.tower.isDead && Math.hypot(s.x - x, s.y - y) < 22) {
+        const tower = s.tower;
+        const cost = getUpgradeCost(tower.type, true);
+        if (tower.upgradeLevel < 3) {
+          const ox = s.x - 42, oy = s.y > 420 ? s.y - 72 : s.y + 28;
+          const opt = { x: ox, y: oy, w: 84, h: 62, isUpgrade: true, unit: tower, isTower: true, cost, level: tower.upgradeLevel };
+          game.selectedSlot = s;
+          game.slotMenuOptions = [opt];
+          game.slotMenuBounds = { x: ox, y: oy, w: 84, h: 62 };
+          game.slotMenuOpen = true;
+        }
+        return;
       }
+    }
+
+    // 5. 点击空闲塔位 → 显示建造菜单
+    const slot = findNearestFreeSlot(x, y, 28, game);
+    if (slot) {
+      const types = game.level.availableTowers.filter(t => TOWER_DEFS[t]);
+      if (types.length === 0) return;
+      const cardW = 72, cardH = 62, gap = 6;
+      const totalW = types.length * cardW + (types.length - 1) * gap;
+      const menuX = Math.max(6, Math.min(894 - totalW, slot.x - totalW / 2));
+      const menuY = slot.y > 420 ? slot.y - 82 : slot.y + 30;
+      const options = [];
+      types.forEach((type, i) => {
+        options.push({
+          x: menuX + i * (cardW + gap), y: menuY, w: cardW, h: cardH,
+          type, isUpgrade: false, slot, def: TOWER_DEFS[type],
+        });
+      });
+      game.selectedSlot = slot;
+      game.slotMenuOptions = options;
+      game.slotMenuBounds = { x: menuX, y: menuY, w: totalW, h: cardH };
+      game.slotMenuOpen = true;
       return;
     }
-    if (game.selectedType in { machine:1, cannon:1, howitzer:1 }) {
-      if (!game.level.availableTowers.includes(game.selectedType)) return;
-      placeTower(game, x, y);
-      ui.updateUI();
-    } else {
-      placeBlocker(game, x, y);
-    }
+
+    // 6. 阻挡单位（近战）— 保持原有方式
+    placeBlocker(game, x, y);
     ui.updateUI();
   },
   onCanvasRightClick(x, y) { sellUnit(game, x, y); ui.updateUI(); },

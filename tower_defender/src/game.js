@@ -49,6 +49,7 @@ export function createGameState() {
     isWaveActive: false, waveComplete: false, levelComplete: false,
     gameOver: false, gameWin: false,
     selectedType: 'infantry', sellMode: false, upgradeMode: false,
+    slotMenuOpen: false, selectedSlot: null, slotMenuOptions: [],
     announcement: null, announcementTimer: 0,
     mouseX: -100, mouseY: -100,
     bossEnemy: null,
