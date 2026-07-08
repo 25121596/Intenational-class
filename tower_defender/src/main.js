@@ -1,6 +1,7 @@
 import './style.css';
 import { createGameState, loadLevel, startWave,
-         placeTower, placeBlocker, sellUnit, forceSpawnEnemy, update, startUpgrade, getUpgradeCost } from './game.js';
+         placeTower, placeBlocker, sellUnit, forceSpawnEnemy, update, startUpgrade, getUpgradeCost,
+         armAirstrike, triggerAirstrike } from './game.js';
 import { draw } from './draw.js';
 import { setupUI } from './ui.js';
 import { LEVELS, CAMPAIGNS, TOWER_DEFS } from './config.js';
@@ -28,6 +29,15 @@ const ui = setupUI(game, {
   onCanvasClick(x, y) {
     // 初始化音效（首次交互）
     initAudio();
+
+    // 空袭瞄准中：点击地图投放
+    if (game.airstrikeArming) {
+      triggerAirstrike(game, x, y);
+      canvas.classList.remove('airstrike-arming');
+      game.airstrikeArming = false;
+      ui.updateUI();
+      return;
+    }
 
     // 1. 塔位弹出菜单：点击菜单选项
     if (game.slotMenuOpen && game.slotMenuOptions.length > 0) {
@@ -226,6 +236,7 @@ function gameLoop(timestamp) {
     }
     ui.updateUI();
     ui.updateButtonState();
+    ui.updateAirstrikeUI();
     ui.updateTimerDisplay();
   }
 

@@ -154,7 +154,7 @@ function drawSlotMenu(game, ctx) {
       ctx.beginPath(); ctx.arc(opt.x + opt.w / 2, opt.y + 16, 11, 0, Math.PI * 2); ctx.stroke();
       // 图标内符号
       ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
-      const icon = opt.type === 'machine' ? '🔫' : opt.type === 'cannon' ? '💣' : '💥';
+      const icon = opt.type === 'machine' ? '🔫' : opt.type === 'cannon' ? '💣' : opt.type === 'aa' ? '🛩️' : '💥';
       ctx.fillText(icon, opt.x + opt.w / 2, opt.y + 20);
       // 塔名
       ctx.fillStyle = '#c0c4cc'; ctx.font = 'bold 10px sans-serif';
@@ -467,6 +467,14 @@ export function draw(game, ctx, canvasW, canvasH) {
     }
   }
 
+  // 空袭瞄准范围预览
+  if (game.airstrikeArming) {
+    ctx.strokeStyle = 'rgba(200,168,74,0.85)'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.arc(game.mouseX, game.mouseY, game.airstrikeRadius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(200,168,74,0.12)';
+    ctx.beginPath(); ctx.arc(game.mouseX, game.mouseY, game.airstrikeRadius, 0, Math.PI * 2); ctx.fill();
+  }
+
   // 阻挡单位
   for (const b of game.blockers) {
     let blockedCount = 0;
@@ -544,28 +552,33 @@ export function draw(game, ctx, canvasW, canvasH) {
   for (const e of game.enemies) {
     if (e.isDead) continue;
     const pos = getPositionOnPath(e.progress, e.pathIndex, game);
-    if (e.blocked) { ctx.strokeStyle = 'rgba(255,60,60,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(pos.x, pos.y, e.size + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+    const cy = e.flying ? pos.y - 28 : pos.y;
+    if (e.flying) {
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.beginPath(); ctx.ellipse(pos.x, pos.y + 3, e.size * 0.9, e.size * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    if (e.blocked) { ctx.strokeStyle = 'rgba(255,60,60,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(pos.x, cy, e.size + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     if (e.enemyType === 'maus') {
-      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(pos.x + 4, pos.y + 8, e.size * 1.1, e.size * 0.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#4d3d2d'; ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 20; ctx.fillRect(pos.x - e.size * 1.2, pos.y - e.size * 0.7, e.size * 2.4, e.size * 1.4); ctx.shadowBlur = 0;
-      ctx.fillStyle = '#5a4a3a'; ctx.beginPath(); ctx.ellipse(pos.x, pos.y - 4, e.size * 0.8, e.size * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#3a2a1a'; ctx.fillRect(pos.x + e.size * 0.4, pos.y - 12, e.size * 1.0, 8);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(pos.x + 4, cy + 8, e.size * 1.1, e.size * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#4d3d2d'; ctx.shadowColor = '#ff4400'; ctx.shadowBlur = 20; ctx.fillRect(pos.x - e.size * 1.2, cy - e.size * 0.7, e.size * 2.4, e.size * 1.4); ctx.shadowBlur = 0;
+      ctx.fillStyle = '#5a4a3a'; ctx.beginPath(); ctx.ellipse(pos.x, cy - 4, e.size * 0.8, e.size * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3a2a1a'; ctx.fillRect(pos.x + e.size * 0.4, cy - 12, e.size * 1.0, 8);
       ctx.fillStyle = '#ffcc88'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('鼠式', pos.x, pos.y - e.size - 24);
-      const bw = e.size * 2.8, bh = 8, by = pos.y - e.size - 18;
+      ctx.fillText('鼠式', pos.x, cy - e.size - 24);
+      const bw = e.size * 2.8, bh = 8, by = cy - e.size - 18;
       ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(pos.x - bw / 2, by, bw, bh);
       const hpp = Math.max(0, e.hp / e.maxHp);
       ctx.fillStyle = hpp > 0.6 ? '#4ade80' : hpp > 0.3 ? '#facc15' : '#f87171'; ctx.fillRect(pos.x - bw / 2, by, bw * hpp, bh);
       ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(pos.x - bw / 2, by, bw, bh);
       ctx.textAlign = 'start';
-      if (e.ranged) { ctx.strokeStyle = 'rgba(255,50,0,0.18)'; ctx.lineWidth = 1.5; ctx.setLineDash([8, 12]); ctx.beginPath(); ctx.arc(pos.x, pos.y, e.rRange, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+      if (e.ranged) { ctx.strokeStyle = 'rgba(255,50,0,0.18)'; ctx.lineWidth = 1.5; ctx.setLineDash([8, 12]); ctx.beginPath(); ctx.arc(pos.x, cy, e.rRange, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     } else {
-      const bw = e.size * 2.8, bh = 6, by = pos.y - e.size - 14;
+      const bw = e.size * 2.8, bh = 6, by = cy - e.size - 14;
       ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(pos.x - bw / 2, by, bw, bh);
       const hpp = Math.max(0, e.hp / e.maxHp);
       ctx.fillStyle = hpp > 0.55 ? '#4ade80' : hpp > 0.25 ? '#facc15' : '#f87171'; ctx.fillRect(pos.x - bw / 2, by, bw * hpp, bh);
       ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.8; ctx.strokeRect(pos.x - bw / 2, by, bw, bh);
-      ctx.save(); ctx.translate(pos.x, pos.y);
+      ctx.save(); ctx.translate(pos.x, cy);
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(3, 3, e.size * 0.9, e.size * 0.55, 0, 0, Math.PI * 2); ctx.fill();
       if (e.enemyType === 'tank' || e.enemyType === 'boss_tank') {
         const tw = e.size * 1.6, th = e.size * 1.1;
@@ -586,7 +599,19 @@ export function draw(game, ctx, canvasW, canvasH) {
         if (e.enemyType === 'assault') { ctx.fillStyle = '#c44545'; ctx.beginPath(); ctx.arc(e.size * 0.15, -2, 3, 0, Math.PI * 2); ctx.fill(); }
       }
       ctx.restore();
-      if (e.ranged && (e.enemyType === 'tank' || e.enemyType === 'boss_tank')) { ctx.strokeStyle = 'rgba(255,80,30,0.15)'; ctx.lineWidth = 1; ctx.setLineDash([6, 10]); ctx.beginPath(); ctx.arc(pos.x, pos.y, e.rRange, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+      if (e.ranged && (e.enemyType === 'tank' || e.enemyType === 'boss_tank')) { ctx.strokeStyle = 'rgba(255,80,30,0.15)'; ctx.lineWidth = 1; ctx.setLineDash([6, 10]); ctx.beginPath(); ctx.arc(pos.x, cy, e.rRange, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+    }
+    // 飞行标识
+    if (e.flying) {
+      ctx.fillStyle = '#cfe3ff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('✈', pos.x, cy + 4);
+      ctx.textAlign = 'start';
+    }
+    // 医疗兵标识
+    if (e.healer) {
+      ctx.fillStyle = '#7CFC00'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('✚', pos.x, cy - e.size - 22);
+      ctx.textAlign = 'start';
     }
   }
 

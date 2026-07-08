@@ -1,5 +1,6 @@
 import {
   TOWER_DEFS, BLOCKER_DEFS, ENEMY_PROTO, PATH_NAMES, LEVELS, CAMPAIGNS,
+  ENDLESS_LEVEL, generateEndlessWave,
 } from './config.js';
 import {
   computePathLengths, getPositionOnPath, findNearestPathPoint, findNearestFreeSlot,
@@ -7,6 +8,9 @@ import {
   spawnEnemy, buildSpawnQueue, getEnemyMoveAmount,
 } from './helpers.js';
 import { playShoot, playExplosion, playDeath, playWaveStart, playPerfect, playUpgrade } from './audio.js';
+
+// 飞行单位在绘制时抬高 28px，命中判定统一对齐
+const FLY_Y_OFFSET = 28;
 
 // ---- 升级系统 ----
 const MAX_UPGRADE = 3;
@@ -58,6 +62,9 @@ export function createGameState() {
     trees: [], roadStones: [],
     activeCampaign: null,
     difficulty: 'private',
+    endless: false,
+    airstrikeCd: 0, airstrikeMax: 900, airstrikeArming: false,
+    airstrikeDmg: 55, airstrikeRadius: 120,
     levelStars: 0, isPerfectClear: false,
     goldTickTimer: 0,
     towersPlaced: 0, blockersPlaced: 0, unitsLost: 0, goldEarned: 0,
@@ -74,8 +81,15 @@ export function calculateStars(hp, startHp) {
 
 // ---- 关卡管理 ----
 export function loadLevel(game, index) {
-  game.levelIndex = index;
-  game.level = LEVELS[index];
+  if (index === 'endless') {
+    game.levelIndex = -1;
+    game.level = ENDLESS_LEVEL;
+    game.endless = true;
+  } else {
+    game.levelIndex = index;
+    game.level = LEVELS[index];
+    game.endless = false;
+  }
   game.activeCampaign = game.level.campaignId || null;
   game.pathLengths = computePathLengths(game.level.paths);
   game.slots = game.level.towerSlots.map(s => ({ x: s.x, y: s.y, occupied: false, tower: null }));
@@ -88,6 +102,7 @@ export function loadLevel(game, index) {
   game.projectiles = []; game.enemyProjectiles = []; game.particles = []; game.deployments = [];
   game.spawnCount = 0; game.spawnMax = 0; game.spawnTimer = 0; game.spawnQueue = [];
   game.damageNumbers = [];
+  game.slotMenuOpen = false; game.slotMenuOptions = []; game.selectedSlot = null;
   game.isWaveActive = false; game.waveComplete = false; game.levelComplete = false;
   game.gameOver = false; game.gameWin = false;
   game.bossEnemy = null;
@@ -98,17 +113,18 @@ export function loadLevel(game, index) {
   game.towersPlaced = 0; game.blockersPlaced = 0; game.unitsLost = 0; game.goldEarned = 0;
   game.menuOpen = false;
   game.paused = false;
+  game.airstrikeArming = false; game.airstrikeCd = 0;
   game.selectedType = game.level.availableTowers.includes('infantry') ? 'infantry' : game.level.availableTowers[0];
 }
 
 export function startWave(game) {
   if (game.isWaveActive || game.gameOver || game.gameWin || game.levelComplete) return;
-  const cfg = game.level.waves[game.wave - 1];
+  const cfg = game.endless ? generateEndlessWave(game.wave) : game.level.waves[game.wave - 1];
   game.spawnMax = cfg.enemies.reduce((s, e) => s + e.c, 0);
   game.spawnInterval = cfg.spawnInterval;
   game.spawnCount = 0;
   game.spawnTimer = 15;
-  game.spawnQueue = buildSpawnQueue(game, game.wave - 1);
+  game.spawnQueue = buildSpawnQueue(game, cfg);
   game.isWaveActive = true;
   game.waveComplete = false;
   game.waveAutoTimer = -1; game.waveAutoTotal = 0;
@@ -126,6 +142,15 @@ export function completeWave(game) {
   game.gold += bonus;
   game.goldEarned += bonus;
   spawnParticles(game, 450, 300, 36, '#ffd93d', [1, 4], [18, 35]);
+
+  if (game.endless) {
+    game.wave++;
+    game.waveAutoTimer = 540;
+    game.waveAutoTotal = 0;
+    game.announcement = `✅ 第${game.wave - 1}波清剿! +${bonus}💰 准备下一波`;
+    game.announcementTimer = 100;
+    return;
+  }
 
   if (game.wave >= game.level.waves.length) {
     // 计算星级
@@ -220,6 +245,7 @@ function finalizeTowerDeployment(game, dep) {
     range: def.range, damage: def.damage, color: def.color,
     bulletColor: def.bulletColor, bulletSpeed: def.bulletSpeed, size: def.size,
     isSplash: def.isSplash, splashRadius: def.splashRadius, splashDamagePct: def.splashDamagePct,
+    canTargetFlying: def.canTargetFlying || false,
     cooldownMax: def.cooldown, hp: def.hp, maxHp: def.hp, flashTimer: 0, isDead: false,
     upgradeLevel: 0,
   };
@@ -357,6 +383,38 @@ export function forceSpawnEnemy(game) {
   game.announcement = `⚡ 提前出怪 x${spawned}！+${bonus}💰`;
   game.announcementTimer = 50;
   spawnParticles(game, 450, 50, 16, '#ffd93d', [1.5, 4], [10, 20]);
+}
+
+// ---- 空袭技能 ----
+export function armAirstrike(game) {
+  if (game.gameOver || game.gameWin || game.levelComplete || game.menuOpen || game.paused) return false;
+  if (game.airstrikeCd > 0 || game.airstrikeArming) return false;
+  game.airstrikeArming = true;
+  return true;
+}
+
+export function triggerAirstrike(game, x, y) {
+  game.airstrikeArming = false;
+  let hit = 0;
+  for (const e of game.enemies) {
+    if (e.isDead) continue;
+    const ep = getPositionOnPath(e.progress, e.pathIndex, game);
+    if (Math.hypot(ep.x - x, ep.y - y) <= game.airstrikeRadius) {
+      e.hp -= game.airstrikeDmg; hit++;
+      if (e.hp <= 0 && !e.isDead) {
+        e.isDead = true; game.gold += e.reward; game.goldEarned += e.reward; game.kills++;
+        playDeath();
+        spawnDamageNumber(game, ep.x, ep.y, `+${e.reward}💰`, '#ffd700');
+        spawnParticles(game, ep.x, ep.y, 14, '#ffcc44', [1.5, 4], [10, 22]);
+      }
+    }
+  }
+  game.airstrikeCd = game.airstrikeMax;
+  spawnParticles(game, x, y, 40, '#ffaa44', [2, 6], [12, 30]);
+  spawnParticles(game, x, y, 20, '#ff6633', [1, 4], [8, 20]);
+  playExplosion();
+  game.announcement = `🛩️ 空袭覆盖！命中 ${hit} 个目标`;
+  game.announcementTimer = 80;
 }
 
 // ---- 主更新循环 ----
@@ -500,16 +558,18 @@ export function update(game) {
       const moveAmount = getEnemyMoveAmount(e, game);
       const oldProgress = e.progress;
       e.progress += moveAmount;
-      for (const b of game.blockers) {
-        if (b.isDead || b.pathIndex !== e.pathIndex) continue;
-        if (oldProgress < b.pathProgress && e.progress >= b.pathProgress) {
-          let blockedCount = 0;
-          for (const e2 of game.enemies) { if (e2.blockingUnit === b && !e2.isDead) blockedCount++; }
-          if (blockedCount < b.blockCount) {
-            e.progress = b.pathProgress;
-            e.blocked = true; e.blockingUnit = b;
-            e.atkCooldown = Math.floor(e.atkInterval * 0.5);
-            break;
+      if (!e.flying) {
+        for (const b of game.blockers) {
+          if (b.isDead || b.pathIndex !== e.pathIndex) continue;
+          if (oldProgress < b.pathProgress && e.progress >= b.pathProgress) {
+            let blockedCount = 0;
+            for (const e2 of game.enemies) { if (e2.blockingUnit === b && !e2.isDead) blockedCount++; }
+            if (blockedCount < b.blockCount) {
+              e.progress = b.pathProgress;
+              e.blocked = true; e.blockingUnit = b;
+              e.atkCooldown = Math.floor(e.atkInterval * 0.5);
+              break;
+            }
           }
         }
       }
@@ -528,6 +588,28 @@ export function update(game) {
       }
     }
   }
+
+  // 医疗兵治疗光环
+  for (const e of game.enemies) {
+    if (e.isDead || !e.healer) continue;
+    if (e.healCooldown > 0) { e.healCooldown--; continue; }
+    const ep = getPositionOnPath(e.progress, e.pathIndex, game);
+    let healed = false;
+    for (const o of game.enemies) {
+      if (o.isDead || o === e) continue;
+      const op = getPositionOnPath(o.progress, o.pathIndex, game);
+      if (Math.hypot(op.x - ep.x, op.y - ep.y) <= e.healRange && o.hp < o.maxHp) {
+        o.hp = Math.min(o.maxHp, o.hp + e.healAmount); healed = true;
+      }
+    }
+    if (healed) {
+      e.healCooldown = e.healInterval;
+      spawnParticles(game, ep.x, ep.y - 14, 6, '#7CFC00', [0.5, 2], [8, 16]);
+    }
+  }
+
+  // 空袭冷却
+  if (game.airstrikeCd > 0) game.airstrikeCd--;
 
   // 敌方炮弹飞行
   for (let i = game.enemyProjectiles.length - 1; i >= 0; i--) {
@@ -609,6 +691,7 @@ export function update(game) {
     let bestTarget = null, bestProgress = -1;
     for (const e of game.enemies) {
       if (e.isDead) continue;
+      if (e.flying && !tower.canTargetFlying) continue;
       const pos = getPositionOnPath(e.progress, e.pathIndex, game);
       const dist = Math.hypot(pos.x - tower.x, pos.y - tower.y);
       if (dist < tower.range && e.progress > bestProgress) { bestProgress = e.progress; bestTarget = { enemy: e, pos }; }

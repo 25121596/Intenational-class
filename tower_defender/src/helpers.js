@@ -158,6 +158,10 @@ export function spawnEnemy(game, enemyDef, pathIndex) {
     rRange: enemyDef.range || 0, rDmg: enemyDef.rDmg || 0,
     rInterval: enemyDef.rInterval || 60, rCooldown: 0,
     rSpeed: enemyDef.rSpeed || 3, rColor: enemyDef.rColor || '#ff4444', rSize: enemyDef.rSize || 5,
+    flying: enemyDef.flying || false,
+    healer: enemyDef.healer || false,
+    healRange: enemyDef.healRange || 0, healAmount: enemyDef.healAmount || 0,
+    healInterval: enemyDef.healInterval || 60, healCooldown: 0,
   };
   if (enemyDef.type === 'maus') {
     game.bossEnemy = enemy;
@@ -168,12 +172,18 @@ export function spawnEnemy(game, enemyDef, pathIndex) {
   return enemy;
 }
 
-export function buildSpawnQueue(game, waveIndex) {
-  const cfg = game.level.waves[waveIndex];
+export function buildSpawnQueue(game, cfg) {
+  // cfg 可以是 wave config 对象 或 waveIndex（兼容旧调用）
+  if (typeof cfg === 'number') cfg = game.level.waves[cfg];
   const queue = [];
   for (const e of cfg.enemies) {
     const proto = ENEMY_PROTO[e.t];
-    for (let i = 0; i < e.c; i++) queue.push({ ...proto });
+    const hpScale = e.hpScale || 1;
+    for (let i = 0; i < e.c; i++) {
+      const entry = { ...proto };
+      if (hpScale !== 1) { entry.hp = Math.floor(entry.hp * hpScale); entry.maxHp = entry.hp; }
+      queue.push(entry);
+    }
   }
   for (let i = queue.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

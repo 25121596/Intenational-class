@@ -60,6 +60,7 @@ export function setupUI(game, callbacks) {
   const timerStat = document.getElementById('timerStat');
   const timerDisplay = document.getElementById('timerDisplay');
   const wavePreview = document.getElementById('wavePreview');
+  const airstrikeBtn = document.getElementById('airstrikeBtn');
 
   // Overlays
   const mainMenuOverlay = document.getElementById('mainMenuOverlay');
@@ -173,7 +174,7 @@ export function setupUI(game, callbacks) {
     if (actualNext > game.level.waves.length) { wavePreview.style.display = 'none'; return; }
     const cfg = game.level.waves[actualNext - 1];
     if (!cfg) { wavePreview.style.display = 'none'; return; }
-    const enemyNames = { rifleman: '步兵', assault: '突击兵', armored: '装甲兵', tank: '坦克', boss_tank: '红坦克', maus: '鼠式' };
+    const enemyNames = { rifleman: '步兵', assault: '突击兵', armored: '装甲兵', tank: '坦克', boss_tank: '红坦克', maus: '鼠式', plane: '飞机', medic: '医疗兵' };
     const parts = cfg.enemies.map(e => `${enemyNames[e.t] || e.t}×${e.c}`).join(' · ');
     const label = game.isWaveActive ? `👁 下一波(${actualNext}/${game.level.waves.length}): ` : `👁 第${actualNext}波: `;
     wavePreview.textContent = label + parts;
@@ -214,6 +215,24 @@ export function setupUI(game, callbacks) {
     for (const [type, btn] of Object.entries(blockerButtons)) btn.disabled = !game.level.availableTowers.includes(type);
   }
 
+  function updateAirstrikeUI() {
+    if (!airstrikeBtn) return;
+    if (game.airstrikeArming) {
+      airstrikeBtn.textContent = '🛩️ 取消空袭';
+      airstrikeBtn.classList.add('active-tower');
+      airstrikeBtn.disabled = false;
+      return;
+    }
+    airstrikeBtn.classList.remove('active-tower');
+    if (game.airstrikeCd > 0) {
+      airstrikeBtn.textContent = `🛩️ 空袭(${Math.ceil(game.airstrikeCd / 60)}s)`;
+      airstrikeBtn.disabled = true;
+    } else {
+      airstrikeBtn.textContent = '🛩️ 空袭';
+      airstrikeBtn.disabled = (game.gameOver || game.gameWin || game.levelComplete);
+    }
+  }
+
   function togglePause() {
     if (game.menuOpen || game.gameOver || game.gameWin || game.levelComplete) return;
     game.paused = !game.paused;
@@ -233,6 +252,7 @@ export function setupUI(game, callbacks) {
     hideAllOverlays();
     mainMenuOverlay.classList.remove('hidden');
     game.menuOpen = true; game.paused = false;
+    game.airstrikeArming = false; canvas.classList.remove('airstrike-arming');
     game.isWaveActive = false; game.waveAutoTimer = -1;
     pauseBtn.classList.remove('pause-active'); pauseBtn.textContent = '⏯️ 暂停';
     updateButtonState(); updateTimerDisplay(); timerStat.style.display = 'none';
@@ -525,7 +545,7 @@ export function setupUI(game, callbacks) {
   updateDiffButtons();
 
   function showTutorial() {
-    alert('🛡️ 钢铁之心 · Iron Hearts 0.5 Beta\n\n操作说明:\n\n远程单位(塔): 点击蓝色炮位放置（部署需0.8-1秒）\n近战单位(阻挡): 点击路径放置（部署需0.8-1秒）\n轻步兵: 挡1打1 | 掷弹兵/游骑兵: 挡2打1+远程\n升级: Shift+点击 或 U键升级模式 (伤害+25%/级 共3级)\n出售: 右键点击 或 S键出售（部署中也可取消）\n键盘1-5: 切换单位\n空格键: 暂停/继续\n下一波: 未出怪开始波次，战斗中提前出怪+40~80💰\n波次间隙每秒+1💰被动收入\n\n难度选择: 列兵(×1.0) / 中士(×1.15) / 上校(×1.4)\n星级评价: ⭐⭐⭐(HP≥18) ⭐⭐(HP 6-17) ⭐(HP 1-5)\n满血通关 = 完美作战！\n\n战役: 为了自由(4关) / 誓死坚守(1关) / 女武神的骑行(1关)');
+    alert('🛡️ 钢铁之心 · Iron Hearts 0.5 Beta\n\n操作说明:\n\n远程单位(塔): 点击蓝色炮位放置（部署需0.8-1秒）\n近战单位(阻挡): 点击路径放置（部署需0.8-1秒）\n轻步兵: 挡1打1 | 掷弹兵/游骑兵: 挡2打1+远程\n升级: Shift+点击 或 U键升级模式 (伤害+25%/级 共3级)\n出售: 右键点击 或 S键出售（部署中也可取消）\n键盘1-5: 切换单位\n空格键: 暂停/继续\n下一波: 未出怪开始波次，战斗中提前出怪+40~80💰\n波次间隙每秒+1💰被动收入\n\n难度选择: 列兵(×1.0) / 中士(×1.15) / 上校(×1.4)\n星级评价: ⭐⭐⭐(HP≥18) ⭐⭐(HP 6-17) ⭐(HP 1-5)\n满血通关 = 完美作战！\n\n空袭技能(🛩️): 点击后选地图投放，范围伤害，冷却15秒\n飞行单位(✈): 只有高射炮(Flak)能打中，注意防空！\n医疗兵(✚): 会持续治疗周围敌人\n\n战役: 为了自由(4关) / 誓死坚守(1关) / 女武神的骑行(1关)');
   }
 
   // 存档页面
@@ -591,6 +611,17 @@ export function setupUI(game, callbacks) {
       canvas.classList.remove('sell-mode');
       selectUnit(game.selectedType);
     }
+  });
+
+  airstrikeBtn.addEventListener('click', () => {
+    if (game.airstrikeArming) {
+      game.airstrikeArming = false; canvas.classList.remove('airstrike-arming');
+      airstrikeBtn.textContent = '🛩️ 空袭'; return;
+    }
+    if (game.airstrikeCd > 0 || game.gameOver || game.gameWin || game.levelComplete || game.menuOpen || game.paused) return;
+    game.airstrikeArming = true;
+    canvas.classList.add('airstrike-arming');
+    game.announcement = '🛩️ 点击地图选择空袭目标'; game.announcementTimer = 120;
   });
 
   restartBtn.addEventListener('click', () => {
@@ -675,7 +706,7 @@ export function setupUI(game, callbacks) {
   }
 
   return {
-    updateUI, updateButtonState, updateTimerDisplay,
+    updateUI, updateButtonState, updateTimerDisplay, updateAirstrikeUI,
     selectUnit, buildWaveBadges, updateWaveBadges,
     updateTowerButtonLocks, showMainMenu, renderMenu: renderMenuCompat,
     getCanvasCoords, togglePause,

@@ -42,6 +42,7 @@ export const TOWER_DEFS = {
     name: 'MG42 机枪班', cost: 50, range: 145, cooldown: 24, damage: 14,
     color: '#4a7db5', bulletColor: '#ffe478', bulletSpeed: 8, size: 13,
     isSplash: false, splashRadius: 0, splashDamagePct: 1, hp: 80,
+    canTargetFlying: true,
   },
   cannon: {
     name: 'Flak 36 AT', cost: 80, range: 200, cooldown: 62, damage: 55,
@@ -52,6 +53,12 @@ export const TOWER_DEFS = {
     name: 'SIG 33 步兵炮', cost: 100, range: 175, cooldown: 84, damage: 32,
     color: '#6b8a5e', bulletColor: '#ffaa44', bulletSpeed: 3.5, size: 19,
     isSplash: true, splashRadius: 85, splashDamagePct: 0.6, hp: 120,
+  },
+  aa: {
+    name: '防空炮', cost: 90, range: 200, cooldown: 28, damage: 24,
+    color: '#9aa6c0', bulletColor: '#fff2a8', bulletSpeed: 12, size: 15,
+    isSplash: false, splashRadius: 0, splashDamagePct: 1, hp: 95,
+    canTargetFlying: true,
   },
 };
 
@@ -97,6 +104,14 @@ export const ENEMY_PROTO = {
   maus: {
     type: 'maus', hp: 3200, speed: 0.18, reward: 800, size: 34, atkDmg: 55, atkInterval: 32,
     ranged: true, range: 300, rDmg: 50, rInterval: 35, rSpeed: 3.0, rColor: '#ff1100', rSize: 10,
+  },
+  plane: {
+    type: 'plane', hp: 75, speed: 2.4, reward: 28, size: 14, atkDmg: 0, atkInterval: 30, ranged: false,
+    flying: true,
+  },
+  medic: {
+    type: 'medic', hp: 95, speed: 0.85, reward: 32, size: 14, atkDmg: 6, atkInterval: 35, ranged: false,
+    healer: true, healRange: 95, healAmount: 5, healInterval: 48,
   },
 };
 
@@ -205,13 +220,13 @@ export const LEVELS = [
       { x: 580, y: 200 }, { x: 580, y: 380 }, { x: 580, y: 500 },
       { x: 800, y: 200 }, { x: 800, y: 380 },
     ],
-    availableTowers: ['machine', 'infantry', 'cannon', 'howitzer', 'defender'],
+    availableTowers: ['machine', 'infantry', 'cannon', 'howitzer', 'defender', 'aa'],
     waves: [
       { name: '城区侦查', spawnInterval: 36, availablePaths: [0, 1], enemies: [{ t: 'rifleman', c: 8 }, { t: 'assault', c: 3 }] },
       { name: '装甲巡逻', spawnInterval: 30, availablePaths: [0, 1], enemies: [{ t: 'assault', c: 6 }, { t: 'armored', c: 4 }, { t: 'rifleman', c: 4 }] },
       { name: '坦克突袭', spawnInterval: 25, availablePaths: [0, 1], enemies: [{ t: 'armored', c: 6 }, { t: 'tank', c: 3 }, { t: 'assault', c: 4 }] },
-      { name: '钢铁巨兽', spawnInterval: 20, availablePaths: [0, 1], enemies: [{ t: 'tank', c: 5 }, { t: 'boss_tank', c: 1 }, { t: 'armored', c: 5 }, { t: 'assault', c: 4 }] },
-      { name: '红色风暴', spawnInterval: 14, availablePaths: [0, 1], enemies: [{ t: 'rifleman', c: 12 }, { t: 'assault', c: 8 }, { t: 'boss_tank', c: 2 }] },
+      { name: '钢铁巨兽', spawnInterval: 20, availablePaths: [0, 1], enemies: [{ t: 'tank', c: 5 }, { t: 'boss_tank', c: 1 }, { t: 'armored', c: 5 }, { t: 'assault', c: 4 }, { t: 'medic', c: 2 }] },
+      { name: '红色风暴', spawnInterval: 14, availablePaths: [0, 1], enemies: [{ t: 'rifleman', c: 12 }, { t: 'assault', c: 8 }, { t: 'boss_tank', c: 2 }, { t: 'plane', c: 4 }] },
     ],
   },
   { // was LV.4 → now LV.5 (欧洲战役第4关)
@@ -227,13 +242,13 @@ export const LEVELS = [
       { x: 130, y: 110 }, { x: 130, y: 300 }, { x: 130, y: 490 }, { x: 450, y: 250 },
       { x: 450, y: 350 }, { x: 700, y: 250 }, { x: 700, y: 350 }, { x: 820, y: 300 }, { x: 200, y: 200 }, { x: 200, y: 400 },
     ],
-    availableTowers: ['machine', 'infantry', 'cannon', 'howitzer', 'defender'],
+    availableTowers: ['machine', 'infantry', 'cannon', 'howitzer', 'defender', 'aa'],
     waves: [
       { name: '三面警戒', spawnInterval: 34, availablePaths: [0, 1, 2], enemies: [{ t: 'rifleman', c: 8 }, { t: 'assault', c: 4 }] },
       { name: '装甲突破', spawnInterval: 28, availablePaths: [0, 1, 2], enemies: [{ t: 'assault', c: 6 }, { t: 'armored', c: 5 }, { t: 'rifleman', c: 5 }] },
       { name: '铁壁压境', spawnInterval: 24, availablePaths: [0, 1, 2], enemies: [{ t: 'armored', c: 8 }, { t: 'tank', c: 3 }] },
       { name: '坦克洪流', spawnInterval: 20, availablePaths: [0, 1, 2], enemies: [{ t: 'tank', c: 6 }, { t: 'assault', c: 6 }] },
-      { name: '⚡ 鼠式 · 终焉一击', spawnInterval: 14, availablePaths: [0, 1, 2], enemies: [{ t: 'tank', c: 4 }, { t: 'armored', c: 6 }, { t: 'assault', c: 6 }, { t: 'maus', c: 1 }] },
+      { name: '⚡ 鼠式 · 终焉一击', spawnInterval: 14, availablePaths: [0, 1, 2], enemies: [{ t: 'tank', c: 4 }, { t: 'armored', c: 6 }, { t: 'assault', c: 6 }, { t: 'maus', c: 1 }, { t: 'plane', c: 5 }, { t: 'medic', c: 2 }] },
     ],
   },
   { // ★ 德国战役第1关
@@ -248,13 +263,43 @@ export const LEVELS = [
       { x: 320, y: 480 }, { x: 540, y: 100 }, { x: 550, y: 500 },
       { x: 780, y: 200 }, { x: 780, y: 380 }, { x: 820, y: 500 },
     ],
-    availableTowers: ['machine', 'infantry', 'cannon'],
+    availableTowers: ['machine', 'infantry', 'cannon', 'aa'],
     waves: [
       { name: '苏联侦察兵', spawnInterval: 40, availablePaths: [0], enemies: [{ t: 'rifleman', c: 8 }] },
       { name: '步兵冲锋', spawnInterval: 34, availablePaths: [0], enemies: [{ t: 'rifleman', c: 12 }] },
       { name: '突击队', spawnInterval: 28, availablePaths: [0], enemies: [{ t: 'rifleman', c: 6 }, { t: 'assault', c: 6 }] },
       { name: '装甲先锋', spawnInterval: 24, availablePaths: [0], enemies: [{ t: 'assault', c: 4 }, { t: 'armored', c: 4 }] },
-      { name: 'T-34 登场', spawnInterval: 20, availablePaths: [0], enemies: [{ t: 'armored', c: 4 }, { t: 'tank', c: 2 }] },
+      { name: 'T-34 登场', spawnInterval: 20, availablePaths: [0], enemies: [{ t: 'armored', c: 4 }, { t: 'tank', c: 2 }, { t: 'plane', c: 4 }] },
     ],
   },
 ];
+
+// ---- 无尽模式（复用 LV.3 莱茵河大桥地图） ----
+export function generateEndlessWave(waveNum) {
+  const interval = Math.max(8, Math.round(42 - waveNum * 0.9));
+  const availablePaths = [0, 1, 2];
+  const enemies = [];
+  const add = (t, c, hpScale = 1) => enemies.push({ t, c, hpScale });
+  add('rifleman', 6 + Math.floor(waveNum * 1.1));
+  if (waveNum >= 2) add('assault', 3 + Math.floor(waveNum * 0.7));
+  if (waveNum >= 3) add('medic', 1 + Math.floor(waveNum / 7));
+  if (waveNum >= 3) add('armored', 2 + Math.floor(waveNum * 0.45), 1 + waveNum * 0.05);
+  if (waveNum >= 4) add('plane', 1 + Math.floor(waveNum * 0.5), 1 + waveNum * 0.05);
+  if (waveNum >= 5) add('tank', 1 + Math.floor(waveNum * 0.35), 1 + waveNum * 0.06);
+  if (waveNum >= 8 && waveNum % 5 === 0) add('boss_tank', 1, 1 + waveNum * 0.08);
+  if (waveNum >= 12 && waveNum % 8 === 0) add('maus', 1, 1 + waveNum * 0.1);
+  const name = (waveNum % 10 === 0) ? `第${waveNum}波 · 装甲洪流` : `第${waveNum}波`;
+  return { name, spawnInterval: interval, availablePaths, enemies, endless: true };
+}
+
+export const ENDLESS_LEVEL = {
+  campaignId: 'endless',
+  name: '无尽 · 莱茵河防线', desc: '莱茵河大桥 · 无限波次生存',
+  endless: true,
+  startGold: 340, startHp: 30,
+  paths: LEVELS[2].paths,
+  river: LEVELS[2].river,
+  towerSlots: LEVELS[2].towerSlots,
+  availableTowers: ['machine', 'infantry', 'cannon', 'howitzer', 'defender', 'aa'],
+  waves: [],
+};
