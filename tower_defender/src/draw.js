@@ -136,26 +136,31 @@ function drawSlotMenu(game, ctx) {
     }
 
     if (opt.isUpgrade) {
-      // 升级选项
-      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('⬆️', opt.x + opt.w / 2, opt.y + 20);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif';
-      ctx.fillText(`升级 Lv.${opt.level+1}→${opt.level+2}`, opt.x + opt.w / 2, opt.y + 38);
-      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 11px sans-serif';
-      ctx.fillText(`${opt.cost}💰`, opt.x + opt.w / 2, opt.y + 55);
+      // 升级选项 — 简洁版
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('⬆️', opt.x + opt.w / 2, opt.y + 22);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(`Lv.${opt.level+1}→${opt.level+2}`, opt.x + opt.w / 2, opt.y + 40);
+      const canAfford = game.gold >= opt.cost;
+      ctx.fillStyle = canAfford ? '#ffd700' : '#f87171';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(`${opt.cost}💰`, opt.x + opt.w / 2, opt.y + 57);
     } else {
-      // 塔选项
+      // 塔选项 — 圆形图标 + 名称 + 价格
       const def = opt.def;
       ctx.fillStyle = def.color; ctx.beginPath();
-      ctx.arc(opt.x + opt.w / 2, opt.y + 18, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.arc(opt.x + opt.w / 2, opt.y + 16, 11, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(opt.x + opt.w / 2, opt.y + 18, 10, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center';
-      const label = opt.type === 'machine' ? 'MG' : opt.type === 'cannon' ? 'AT' : 'SIG';
-      ctx.fillText(label, opt.x + opt.w / 2, opt.y + 22);
+      ctx.beginPath(); ctx.arc(opt.x + opt.w / 2, opt.y + 16, 11, 0, Math.PI * 2); ctx.stroke();
+      // 图标内符号
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      const icon = opt.type === 'machine' ? '🔫' : opt.type === 'cannon' ? '💣' : '💥';
+      ctx.fillText(icon, opt.x + opt.w / 2, opt.y + 20);
+      // 塔名
       ctx.fillStyle = '#c0c4cc'; ctx.font = 'bold 10px sans-serif';
       const name = getUnitDisplayName(opt.type, game.activeCampaign);
-      ctx.fillText(name.length > 6 ? name.substring(0, 5)+'..' : name, opt.x + opt.w / 2, opt.y + 40);
+      ctx.fillText(name.length > 5 ? name.substring(0, 5) : name, opt.x + opt.w / 2, opt.y + 38);
+      // 价格
       const canAfford = game.gold >= def.cost;
       ctx.fillStyle = canAfford ? '#ffd700' : '#f87171';
       ctx.font = 'bold 10px sans-serif';

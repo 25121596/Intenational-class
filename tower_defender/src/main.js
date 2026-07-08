@@ -4,7 +4,7 @@ import { createGameState, loadLevel, startWave,
 import { draw } from './draw.js';
 import { setupUI } from './ui.js';
 import { LEVELS, CAMPAIGNS, TOWER_DEFS } from './config.js';
-import { computePathLengths, generateTrees, generateRoadStones } from './helpers.js';
+import { computePathLengths, generateTrees, generateRoadStones, findNearestFreeSlot } from './helpers.js';
 import { initAudio } from './audio.js';
 
 const game = createGameState();
@@ -36,7 +36,10 @@ const ui = setupUI(game, {
           if (opt.isUpgrade) {
             startUpgrade(game, opt.unit, true);
           } else {
+            const prevType = game.selectedType;
+            game.selectedType = opt.type;
             placeTower(game, opt.slot.x, opt.slot.y);
+            game.selectedType = prevType;
           }
           game.slotMenuOpen = false;
           game.slotMenuOptions = [];
